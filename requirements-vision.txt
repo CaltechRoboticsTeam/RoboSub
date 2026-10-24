@@ -1,6 +1,6 @@
-# Offline geometry/calibration. Use the distro cv_bridge/OpenCV on the Jetson.
+# NumPy 1 for Humble's cv_bridge; calibration needs modern OpenCV.
 numpy>=1.23,<2
 scipy>=1.10,<1.16
-opencv-contrib-python>=4.8,<4.12
+opencv-python>=4.8,<4.12
 PyYAML>=6,<7
 trimesh>=4.4,<6

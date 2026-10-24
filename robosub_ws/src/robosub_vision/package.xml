@@ -5,7 +5,6 @@
   <description>Configurable stereo underwater object geometry.</description>
   <maintainer email="robotics@caltech.edu">Caltech Robotics Team</maintainer>
   <license>MIT</license>
-  <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>launch_ros</exec_depend>

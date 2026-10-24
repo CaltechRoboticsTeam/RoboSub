@@ -1,0 +1,11 @@
+diff --git a/src/setup.py b/src/setup.py
+--- a/src/setup.py
++++ b/src/setup.py
+@@ -261,4 +261,5 @@ install_requires = [
+ else:
+-    install_requires.append('numpy>=2.0,<3.0') # For py > 3.8, target numpy 2.x
+-
++    # Match the NumPy 1 ABI used to build this wheel for ROS 2 Humble.
++    install_requires.append('numpy>=1.23,<2.0')
++
+ print("Install requires:", install_requires)

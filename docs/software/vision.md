@@ -24,7 +24,7 @@ also run without ROS. `robosub_vision_msgs` supplies `TargetObservation`.
 `tools/` contains `calibrate_zed.py`, `import_calibmar.py`,
 `check_vision_runtime.py`, `generate_vision_data.py`, `isaac_vision_data.py`,
 `train_vision.py`, `make_vision_examples.py`, the `_vision.py` path helper and
-`calibmar_corner_order.patch`. `config/` contains `vision.yaml`,
+the Calibmar/NumPy compatibility patches. `config/` contains `vision.yaml`,
 `development.yaml`, `examples.yaml`, `synthetic.yaml` and `board.yaml`;
 `models/` contains three example STLs. Offline checks are in
 `tests/vision/test_geometry.py`; dependencies and lint settings are in
@@ -33,8 +33,15 @@ also run without ROS. `robosub_vision_msgs` supplies `TargetObservation`.
 ## Jetson setup and launch
 
 Use Ubuntu 22.04, ROS 2 Humble and the ZED SDK installer matching the **actual**
-JetPack/CUDA on the Orin Nano. No Jetson was available during implementation.
-Inspect versions first, then choose matching vendor packages:
+JetPack/CUDA on the Orin Nano. Inspect versions first, then choose matching
+vendor packages. A minimal JetPack install can have working CUDA libraries
+without `nvcc`, TensorRT headers or TensorRT Python bindings. Install the
+matching development packages before building the wrapper; keep the existing
+L4T platform and system OpenCV packages.
+
+Use Python 3.10; system site packages keep ROS and `cv_bridge` visible.
+
+### Python environment
 
 ```bash
 python3 tools/check_vision_runtime.py
@@ -44,14 +51,48 @@ sudo apt install python3-colcon-common-extensions python3-vcstool \
   ros-humble-tf2-ros ros-humble-zed-msgs
 python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
+pip install 'setuptools<80' wheel 'cython==3.0.12' ninja
 pip install -r requirements-vision.txt
+```
+
+OpenCV 4.11's standard Python wheel includes our ArUco/AprilTag APIs; a second
+contrib wheel is unnecessary.
+
+### Keep the ZED Python binding compatible with Humble
+
+Humble's binary `cv_bridge` uses NumPy 1. Prebuilt recent `pyzed` wheels use
+NumPy 2; installing them into this environment can break ROS image conversion.
+Use Stereolabs' supported source-build option against the environment's NumPy
+1 instead. With SDK 5.5.1 installed and the virtualenv active, from the repo:
+
+```bash
+git clone https://github.com/stereolabs/zed-python-api.git .cache/zed-python-api
+git -C .cache/zed-python-api checkout 0b750e335f153aed80cf6ed6fbb06997179e43b2
+git -C .cache/zed-python-api apply "$PWD/tools/pyzed_numpy1.patch"
+python3 -m pip install --no-deps --no-build-isolation .cache/zed-python-api/src
+python3 -c 'import pyzed.sl as sl; print(sl.Camera.get_sdk_version())'
+```
+
+The patch adjusts the wheel's runtime NumPy requirement to match its build
+environment; `--no-build-isolation` keeps the build on NumPy 1. Do not run
+another large C++ build alongside this binding on the 8 GB Jetson. Install
+JetPack-compatible GPU PyTorch/torchvision before Ultralytics, so pip does not
+replace them with generic CPU packages. See the vendor guides below.
+
+### Build and launch
+
+With the virtualenv active, from the repository root:
+
+```bash
 cd robosub_ws
 vcs import src < vision.repos
 rosdep install --from-paths src/robosub_vision src/robosub_vision_msgs \
   src/zed-ros2-wrapper --ignore-src -r -y
-python3 /usr/bin/colcon build --symlink-install \
+CMAKE_BUILD_PARALLEL_LEVEL=1 MAKEFLAGS=-j1 \
+  python3 /usr/bin/colcon build --symlink-install \
   --packages-up-to robosub_vision \
-  --parallel-workers 2
+  --parallel-workers 1 --cmake-args -DBUILD_TESTING=OFF \
+  -DCMAKE_BUILD_TYPE=Release '-DCMAKE_CXX_FLAGS_RELEASE=-O2 -DNDEBUG'
 source install/setup.bash
 cd ..
 VISION=robosub_ws/src/robosub_vision
@@ -60,15 +101,17 @@ python3 /opt/ros/humble/bin/ros2 launch robosub_vision vision.launch.py \
   config:="$VISION/config/development.yaml"
 ```
 
-Use Python 3.10; system site packages keep ROS and `cv_bridge` visible. Invoke
-colcon and the ROS CLI through that interpreter when using a virtualenv; plain
-`ros2` works when its interpreter has the same dependencies. Install
-the SDK's `pyzed` binding for that interpreter. Connect the ZED 2i over USB 3.0
-on the Jetson. Only the official wrapper opens it. GEN_3, IMU fusion and
-NEURAL_LIGHT run together; NEURAL is selectable. `vision.repos` pins wrapper
-5.5.0 source. Startup checks installed parameter keys and requires SDK >=5.2.1.
-`PREFER_CPU` is sent only on SDK >=5.5; there is no GEN_1 fallback.
+Invoke colcon and the ROS CLI through that interpreter when using a virtualenv;
+plain `ros2` works when its interpreter has the same dependencies. Connect the
+ZED 2i over USB 3.0 on the Jetson. Only the official wrapper opens it. GEN_3,
+IMU fusion and NEURAL_LIGHT run together; NEURAL is selectable. `vision.repos`
+pins wrapper 5.5.0 source. Startup checks installed parameter keys and requires
+SDK >=5.2.1. `PREFER_CPU` is sent only on SDK >=5.5; there is no GEN_1 fallback.
 `development.yaml` explicitly selects **uncorrected** depth and no targets.
+
+The first launch downloads and optimizes the SDK's depth/tracking models for
+the Jetson. Allow several minutes; synchronization warnings before camera
+startup completes are expected. Later launches reuse those model caches.
 
 ## Underwater calibration
 
@@ -255,10 +298,38 @@ Humble message parsing/CDR round trip; wheel/sdist, strict documentation build,
 byte compilation and lint/format checks. The one-epoch model
 scored zero mAP and is not a useful detector.
 
-Not validated: ROS/colcon execution, SDK loading, Calibmar C++/GUI, Isaac
-rendering, TensorRT export, Jetson memory/latency or underwater accuracy.
-The local Docker daemon was unavailable. SDK matches can remain biased by
-underwater epipolar departures; ray-gap checks cannot recover missing matches.
+Validated natively on the 8 GB Orin Nano with its USB 3 ZED 2i on
+2026-10-24:
+
+- Ubuntu 22.04.5, L4T 36.4.7, ROS 2 Humble, CUDA 12.6, TensorRT 10.3,
+  SDK 5.5.1 and wrapper 5.5.0. The L4T platform and camera firmware were
+  unchanged.
+- Python 3.10.12, NumPy 1.26.4, OpenCV 4.11, NVIDIA PyTorch
+  `2.5.0a0+872d972e41.nv24.08`, CUDA-built torchvision 0.20.0 and
+  Ultralytics 8.4.184; `pip check` passed.
+- All ten numerical/contract tests, all rosdep dependencies, a native colcon
+  build of four packages, ROS message serialization, `cv_bridge`, CUDA matrix
+  multiplication and CUDA NMS passed. Direct SDK capture returned 20 stereo
+  pairs at HD720.
+- The production detector loaded a randomly initialized YOLO11n checkpoint,
+  exported an FP16 TensorRT engine on the Jetson, then loaded and ran it.
+  This is an execution check, not a trained recognition model.
+- A 45-second combined ROS check received raw/rectified stereo images,
+  disparity, depth, confidence, IMU, odometry and tracking status while the
+  TensorRT detector ran. Tracking reported OK with pose confidence 91;
+  perception reported zero rejected synchronized inputs. One load sample
+  used about 4.8 GB RAM, with a last-frame processing time of 48.7 ms.
+  Subscriber overhead and random weights make this unsuitable as a final
+  performance benchmark.
+
+These checks used factory calibration and explicitly uncorrected SDK depth.
+The first launch cached the SDK's optimized models; all test nodes were stopped
+afterward. No underwater calibration was applied.
+
+Not validated: loading an exported underwater calibration into the SDK,
+Calibmar C++/GUI, Isaac rendering, final trained-model/CAD performance or
+underwater accuracy. SDK matches can remain biased by underwater epipolar
+departures; ray-gap checks cannot recover missing matches.
 Occlusion, partial surfaces, symmetry and initialization limit observability.
 The 1–2 cm objective at 0.5–2 m requires underwater ground-truth measurements.
 
@@ -269,6 +340,7 @@ and per-target solver settings. No game rules are embedded in the pipeline.
 ## References
 
 - [Wrapper parameters](https://github.com/stereolabs/zed-ros2-wrapper)
+- [ZED Python API / NumPy compatibility](https://github.com/stereolabs/zed-python-api#troubleshooting)
 - [SDK calibration schema/units](https://docs.stereolabs.com/docs/integrations/opencv/zed-open-cv-calibration)
 - [Calibmar](https://github.com/MDSKiel/calibmar) and
   [physical ray conventions](https://github.com/MDSKiel/colmap_underwater/blob/5b73ae1a61856c4e712908a353c951a1ba2bc748/src/colmap/sensor/models_refrac.h)

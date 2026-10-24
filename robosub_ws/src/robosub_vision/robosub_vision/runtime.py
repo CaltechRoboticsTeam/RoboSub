@@ -114,7 +114,15 @@ def machine_report():
             "JetPack/L4T",
             ["dpkg-query", "-W", "nvidia-jetpack", "nvidia-l4t-core"],
         ),
-        ("CUDA", ["nvcc", "--version"]),
+        (
+            "CUDA compiler",
+            [
+                "/usr/local/cuda/bin/nvcc"
+                if Path("/usr/local/cuda/bin/nvcc").is_file()
+                else "nvcc",
+                "--version",
+            ],
+        ),
     ):
         try:
             result = subprocess.run(
@@ -127,6 +135,6 @@ def machine_report():
         import pyzed.sl as sl
 
         report["ZED SDK"] = sl.Camera.get_sdk_version()
-    except ImportError:
+    except (ImportError, OSError, ValueError):
         report["ZED SDK"] = "unavailable"
     return report
