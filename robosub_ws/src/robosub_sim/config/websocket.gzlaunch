@@ -1,0 +1,13 @@
+<?xml version='1.0'?>
+<!-- Websocket bridge from Gazebo transport to gzweb browser clients.
+     Started by `pool.launch.py web:=true`; needs the world's SceneBroadcaster.
+     There is no authorization key, so anyone who can reach the port can
+     watch the sim. -->
+<gz version='1.0'>
+  <plugin name="gz::launch::WebsocketServer"
+          filename="gz-launch-websocket-server">
+    <publication_hz>30</publication_hz>
+    <port>9002</port>
+    <max_connections>-1</max_connections>
+  </plugin>
+</gz>

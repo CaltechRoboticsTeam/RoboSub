@@ -37,6 +37,24 @@ ros2 topic list
 rqt_image_view /sub/camera/image_raw
 ```
 
+## Browser view (gzweb)
+To watch the sim without X11 (headless box, remote machine, teammates), start
+gz-launch's websocket server alongside it:
+```bash
+ros2 launch robosub_sim pool.launch.py gui:=false web:=true
+```
+Open <https://app.gazebosim.org/visualization> (the official gzweb client) and
+connect to `ws://localhost:9002`. Meshes are streamed over the same socket.
+
+The page is served over HTTPS, so browsers allow a plain `ws://` connection
+only to `localhost`. To view from another machine, tunnel the port:
+```bash
+ssh -L 9002:localhost:9002 <user>@<sim-host>
+```
+The server has no authorization key; anyone who can reach port 9002 can watch.
+The plugin ships with `gz-harmonic` (`libgz-launch7`), so the image needs
+nothing extra.
+
 ## Layout
 | Path | What it is |
 |---|---|
@@ -44,6 +62,7 @@ rqt_image_view /sub/camera/image_raw
 | `docker/compose.yaml` | GPU, X11, host networking, volume mounts |
 | `src/robosub_sim/worlds/pool.sdf` | Pool, water, sub, gate |
 | `src/robosub_sim/config/bridge.yaml` | Gazebo topics <-> ROS topics |
+| `src/robosub_sim/config/websocket.gzlaunch` | gzweb websocket server (port 9002) |
 | `src/robosub_sim/robosub_sim/thruster_mixer.py` | Control allocation |
 | `src/robosub_sim/robosub_sim/depth_sensor.py` | Altimeter -> `/depth` (stand-in for the pressure sensor driver) |
 | `src/robosub_sim/robosub_sim/dvl_sensor.py` | Ground truth -> `/dvl/velocity`, `/dvl/altitude` (stand-in for the Pathfinder DVL driver) |
