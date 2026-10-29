@@ -11,9 +11,9 @@ The separate future T200/ESC configuration is unchanged.
 The new path is:
 
 ```text
-PX4 servo telemetry -> MAVROS -> Jetson USB relay -> Teensy -> RS-485 -> M5
+Xbox -> body effort -> mixer -> Jetson USB driver -> Teensy -> RS-485 -> M5
                                  |
-                 or an explicit single-slot USB test
+                 or an explicit single-slot USB diagnostic
 ```
 
 PX4's UART to the Teensy is no longer a command source in the new firmware.
@@ -36,7 +36,7 @@ The default build remains **USB-only**: DE stays low, no UART bytes are
 transmitted, and nonneutral commands are rejected. It receives on both UARTs
 to report activity counters. The installed Serial1 image enables neutral
 RS-485 transmission on boot. Nonzero output requires an explicit enabled
-command from a USB test or relay; no motor pulse runs automatically.
+command from joystick control or an explicit USB diagnostic; no motor pulse runs automatically.
 
 ## Build without touching hardware
 
@@ -155,34 +155,9 @@ The field pulse can test the transmit path even when return traffic is broken.
 Add `--require-feedback` to require a fresh, CRC-valid, fault-free status from
 the configured reply node 1 before and during the pulse; this requires a
 capture-capable image. The current field image reports protocol version 1
-and raw byte counters only. The PX4 relay retains its +/-25 us limit.
+and raw byte counters only.
 Node 1 is preserved from the
 supplied sketch; its existence on this vehicle has not been verified.
-
-## Relay the existing PX4 outputs over USB
-
-With a verified bus-enabled image, fresh port-0 `SERVO_OUTPUT_RAW` at 10 Hz
-or faster and PX4 connected, disarmed and MANUAL:
-
-```bash
-./teensy.sh relay
-./teensy.sh relay --execute --legacy-depth
-```
-
-The relay waits up to 15 seconds for discovery and requires one second of
-disarmed, neutral outputs. It never arms PX4. Once ready, disarmed state sends
-neutral; armed state forwards port-0 slots from system/component 1/1.
-State older than 1.5 seconds, output older than 0.2 seconds, a mode change,
-an output beyond the firmware limit, or a USB fault stops the process and
-attempts neutral cleanup. A fault requires an explicit restart.
-
-Depth is published as `/depth` in metres, positive down. `--legacy-depth`
-also publishes `DEPTH` on `/mavros/debug_value/named_value_float` for the old
-DVL program. That is a ROS receive topic, not a command sent to PX4. Use that
-option only when the old UART depth source has been replaced, to avoid two
-sources. Preserve the installed calibration until it is measured again.
-A low-rail ADC sample (0 or 1) is reported as unavailable and is not published
-as a depth reading; it is not interpreted as a valid water-depth measurement.
 
 ## Observed USB-only check
 

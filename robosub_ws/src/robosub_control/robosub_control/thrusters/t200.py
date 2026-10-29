@@ -12,7 +12,7 @@ import json
 import math
 from numbers import Real
 
-from robosub_sim import future_t200 as constants
+from robosub_control.config import future_t200 as constants
 
 
 def finite_number(value, name):
@@ -46,7 +46,7 @@ def interpolate(value, coordinates, samples):
 
 @lru_cache(maxsize=1)
 def load_curves():
-    source = files("robosub_sim").joinpath("data/t200.json")
+    source = files("robosub_control.thrusters").joinpath("data/t200.json")
     data = json.loads(source.read_text())
     result = {float(voltage): rows for voltage, rows in data["curves"].items()}
     for rows in result.values():

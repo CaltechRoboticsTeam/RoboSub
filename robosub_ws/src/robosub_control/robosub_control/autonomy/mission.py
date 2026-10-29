@@ -34,6 +34,7 @@ Parameters
     settle          s inside tolerance     (1.0)
     step_timeout    s                      (60.0)
 """
+
 import math
 
 from geometry_msgs.msg import Point
@@ -42,39 +43,50 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64
 
-from robosub_sim import constants
-from robosub_sim.depth_heading_controller import wrap_pi
-from robosub_sim.state_estimator import q_to_rpy
+from robosub_control.config import constants
+from robosub_control.autonomy.depth_heading_controller import wrap_pi
+from robosub_control.autonomy.state_estimator import q_to_rpy
 
 
 class Mission(Node):
     def __init__(self):
-        super().__init__('mission')
+        super().__init__("mission")
         for name, default in constants.MISSION_DEFAULTS.items():
             self.declare_parameter(name, default)
-        g = lambda n: self.get_parameter(n).value
-        self.steps = [str(s) for s in g('mission')]
-        self.pos_tol, self.depth_tol = float(g('pos_tol')), float(g('depth_tol'))
-        self.heading_tol = math.radians(float(g('heading_tol')))
-        self.settle, self.step_timeout = float(g('settle')), float(g('step_timeout'))
 
-        p = lambda t, T: self.create_publisher(T, t, 10)
-        self.pub_depth = p('/sub/setpoint/depth', Float64)
-        self.pub_heading = p('/sub/setpoint/heading', Float64)
-        self.pub_pos = p('/sub/setpoint/position', Point)
-        self.pub_roll_turns = p('/sub/setpoint/roll_turns', Float64)
-        self.create_subscription(Odometry, '/sub/state', self.on_state, 10)
+        def g(name):
+            return self.get_parameter(name).value
+
+        self.steps = [str(s) for s in g("mission")]
+        self.pos_tol, self.depth_tol = (
+            float(g("pos_tol")),
+            float(g("depth_tol")),
+        )
+        self.heading_tol = math.radians(float(g("heading_tol")))
+        self.settle, self.step_timeout = (
+            float(g("settle")),
+            float(g("step_timeout")),
+        )
+
+        def p(topic, message_type):
+            return self.create_publisher(message_type, topic, 10)
+
+        self.pub_depth = p("/sub/setpoint/depth", Float64)
+        self.pub_heading = p("/sub/setpoint/heading", Float64)
+        self.pub_pos = p("/sub/setpoint/position", Point)
+        self.pub_roll_turns = p("/sub/setpoint/roll_turns", Float64)
+        self.create_subscription(Odometry, "/sub/state", self.on_state, 10)
 
         self.state = None
-        self.heading_cmd = None      # yaw we are holding, rad
-        self.i = -1                  # current step index
-        self.check = None            # function -> True when the step is done
+        self.heading_cmd = None  # yaw we are holding, rad
+        self.i = -1  # current step index
+        self.check = None  # function -> True when the step is done
         self.t_step = None
         self.t_inside = None
         self.t_log = 0.0
         self.finished = False
         self.create_timer(constants.MISSION_PERIOD_S, self.periodic)
-        self.get_logger().info(f'mission: {self.steps}')
+        self.get_logger().info(f"mission: {self.steps}")
 
     # ------------------------------------------------------------ helpers
     def on_state(self, msg):
@@ -84,8 +96,12 @@ class Mission(Node):
         s = self.state
         q = s.pose.pose.orientation
         _, _, yaw = q_to_rpy((q.w, q.x, q.y, q.z))
-        return (s.pose.pose.position.x, s.pose.pose.position.y,
-                -s.pose.pose.position.z, yaw)
+        return (
+            s.pose.pose.position.x,
+            s.pose.pose.position.y,
+            -s.pose.pose.position.z,
+            yaw,
+        )
 
     def now(self):
         return self.get_clock().now().nanoseconds * 1e-9
@@ -97,50 +113,64 @@ class Mission(Node):
             self.finished = True
             x, y, depth, yaw = self.pose()
             self.get_logger().info(
-                f'MISSION COMPLETE at ({x:+.2f}, {y:+.2f}) depth {depth:.2f} m '
-                f'yaw {math.degrees(yaw):+.1f} deg; holding')
+                f"MISSION COMPLETE at ({x:+.2f}, {y:+.2f}) depth {depth:.2f} m "
+                f"yaw {math.degrees(yaw):+.1f} deg; holding"
+            )
             return
         words = self.steps[self.i].split()
         cmd, args = words[0].lower(), [float(a) for a in words[1:]]
         x, y, depth, yaw = self.pose()
-        label = f'step {self.i+1}/{len(self.steps)}: {self.steps[self.i]}'
+        label = f"step {self.i + 1}/{len(self.steps)}: {self.steps[self.i]}"
 
-        if cmd == 'dive':
+        if cmd == "dive":
             target = args[0]
             self.pub_depth.publish(Float64(data=target))
             self.check = lambda: abs(self.pose()[2] - target) < self.depth_tol
-        elif cmd == 'heading':
+        elif cmd == "heading":
             self.heading_cmd = math.radians(args[0])
             self.pub_heading.publish(Float64(data=self.heading_cmd))
-            self.check = lambda: abs(wrap_pi(self.pose()[3] - self.heading_cmd)) < self.heading_tol
-        elif cmd in ('move', 'goto'):
-            if self.heading_cmd is None:          # hold the current heading while moving
+            self.check = lambda: (
+                abs(wrap_pi(self.pose()[3] - self.heading_cmd))
+                < self.heading_tol
+            )
+        elif cmd in ("move", "goto"):
+            if (
+                self.heading_cmd is None
+            ):  # hold the current heading while moving
                 self.heading_cmd = yaw
                 self.pub_heading.publish(Float64(data=yaw))
-            if cmd == 'move':
+            if cmd == "move":
                 tx = x + args[0] * math.cos(self.heading_cmd)
                 ty = y + args[0] * math.sin(self.heading_cmd)
             else:
                 tx, ty = args[0], args[1]
             self.pub_pos.publish(Point(x=tx, y=ty))
-            label += f' -> target ({tx:+.2f}, {ty:+.2f})'
-            self.check = lambda: math.hypot(self.pose()[0] - tx, self.pose()[1] - ty) < self.pos_tol
-        elif cmd == 'roll':
+            label += f" -> target ({tx:+.2f}, {ty:+.2f})"
+            self.check = lambda: (
+                math.hypot(self.pose()[0] - tx, self.pose()[1] - ty)
+                < self.pos_tol
+            )
+        elif cmd == "roll":
             turns = args[0]
             self.pub_roll_turns.publish(Float64(data=turns))
             t_done = (
-                self.now() + abs(turns) * 2*math.pi
-                / constants.ROLL_SPIN_RATE_RAD_S + 3.0
+                self.now()
+                + abs(turns) * 2 * math.pi / constants.ROLL_SPIN_RATE_RAD_S
+                + 3.0
             )
-            self.check = lambda: self.now() > t_done and abs(self.roll()) < math.radians(10)
-        elif cmd == 'wait':
+            self.check = lambda: (
+                self.now() > t_done and abs(self.roll()) < math.radians(10)
+            )
+        elif cmd == "wait":
             t_done = self.now() + args[0]
             self.check = lambda: self.now() > t_done
-        elif cmd == 'surface':
+        elif cmd == "surface":
             self.pub_depth.publish(Float64(data=0.3))
             self.check = lambda: self.pose()[2] < 0.5
         else:
-            self.get_logger().error(f'unknown step "{self.steps[self.i]}"; stopping')
+            self.get_logger().error(
+                f'unknown step "{self.steps[self.i]}"; stopping'
+            )
             self.finished = True
             return
 
@@ -157,7 +187,9 @@ class Mission(Node):
         if self.finished or self.state is None:
             return
         if self.state.pose.covariance[0] < 0.0:
-            self.get_logger().warn('no DVL: position unknown, waiting', throttle_duration_sec=5.0)
+            self.get_logger().warn(
+                "no DVL: position unknown, waiting", throttle_duration_sec=5.0
+            )
             return
         if self.i < 0:
             self.start_step()
@@ -168,20 +200,22 @@ class Mission(Node):
             self.t_log = t
             x, y, depth, yaw = self.pose()
             self.get_logger().info(
-                f'  at ({x:+.2f}, {y:+.2f}) depth {depth:.2f} yaw {math.degrees(yaw):+.1f} deg')
+                f"  at ({x:+.2f}, {y:+.2f}) depth {depth:.2f} yaw {math.degrees(yaw):+.1f} deg"
+            )
 
         if self.check():
             if self.t_inside is None:
                 self.t_inside = t
             elif t - self.t_inside >= self.settle:
-                self.get_logger().info(f'  done in {t - self.t_step:.1f} s')
+                self.get_logger().info(f"  done in {t - self.t_step:.1f} s")
                 self.start_step()
         else:
             self.t_inside = None
             if t - self.t_step > self.step_timeout:
                 self.get_logger().error(
                     f'step "{self.steps[self.i]}" timed out after {self.step_timeout:.0f} s; '
-                    'mission stopped, holding position')
+                    "mission stopped, holding position"
+                )
                 self.finished = True
 
 
@@ -193,13 +227,13 @@ def main():
     except KeyboardInterrupt:
         pass
     except Exception:
-        if rclpy.ok():          # a real error; a SIGTERM mid-spin is not
+        if rclpy.ok():  # a real error; a SIGTERM mid-spin is not
             raise
     finally:
         node.destroy_node()
-        if rclpy.ok():          # a SIGTERM already shut the context down
+        if rclpy.ok():  # a SIGTERM already shut the context down
             rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -1,6 +1,6 @@
 # T200 thrusters, geometry and PWM
 
-Saved settings live in `robosub_sim/robosub_sim/future_t200.py`.
+Saved settings live in `robosub_control/robosub_control/config/future_t200.py`.
 Select them with `vehicle:=future_t200`. The mounts below are a planning copy
 of the current M5 vehicle, **not measured geometry for the future vehicle**.
 `GEOMETRY_CONFIRMED` remains false. Positions were supplied from Onshape: +x aft, +y starboard, +z up. The conversion to ROS body axes is
@@ -92,7 +92,7 @@ to the configured value, at most 30 A per ESC. It never extrapolates voltage.
 At 16 V the source-data endpoints are about +51.44/-39.91 N per motor.
 
 Data provenance and preprocessing are recorded alongside
-`robosub_sim/robosub_sim/data/t200.json`. This is an open-loop estimate:
+`robosub_control/robosub_control/thrusters/data/t200.json`. This is an open-loop estimate:
 installed water flow, voltage sag, wiring and temperature affect actual
 thrust/current. A modeled current bound is not electrical or thermal
 protection, and is not a configured whole-battery current limit.

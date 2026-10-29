@@ -6,12 +6,12 @@ from geometry_msgs.msg import Twist
 import rclpy
 from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
-from robosub_sim import constants
-from robosub_sim.tuning import fixed_parameter
+from robosub_control.config import constants
+from robosub_control.utils.tuning import fixed_parameter
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool
 
-from robosub_bringup.gamepad import GamepadControl
+from robosub_control.teleop.gamepad import GamepadControl
 
 
 class XboxTeleop(Node):
@@ -32,22 +32,27 @@ class XboxTeleop(Node):
             clock=self.wall_clock,
         )
         self.get_logger().info(
-            f"Xbox {source} input: center sticks, release RB, then hold RB. "
+            f"Xbox {source} input: center sticks and release controls; "
+            "press RB to toggle movement. "
             f"Maximum normalized effort: {scale:.0%}."
         )
 
     def on_joy(self, message):
+        if not message.axes and not message.buttons:
+            self.control.stop()
+            return
         try:
             self.control.accept(message.axes, message.buttons, time.monotonic())
         except ValueError as error:
             self.get_logger().error(str(error), throttle_duration_sec=2.0)
 
     def periodic(self):
-        surge, sway, heave, yaw = self.control.sample(time.monotonic())
+        surge, sway, heave, roll, yaw = self.control.sample(time.monotonic())
         command = Twist()
         command.linear.x = surge
         command.linear.y = sway
         command.linear.z = heave
+        command.angular.x = roll
         command.angular.z = yaw
         self.pub.publish(command)
         self.enabled_pub.publish(Bool(data=self.control.enabled))

@@ -15,7 +15,7 @@ from rclpy.qos import qos_profile_sensor_data
 from rosidl_runtime_py.convert import message_to_ordereddict
 from sensor_msgs.msg import BatteryState, Imu
 
-from robosub_bringup.field_checks import (
+from field_checks import (
     json_finite,
     receiver_power,
     servo_packet,

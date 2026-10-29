@@ -8,7 +8,7 @@ From the Mac repository root:
 
 This copies runtime sources, guides, tools and control tests into a new
 `~/robosub-field/releases/` directory, verifies SHA-256 transfer checksums,
-builds `robosub_sim` and `robosub_bringup`, and runs tests in isolated ROS
+builds `robosub_control`, `robosub_sim` and `robosub_bringup`, and runs tests in isolated ROS
 domain 198. It refuses that test domain if a running MAVROS process uses it.
 The `current` symlink changes only after successful build/tests. Existing
 checkouts and running robot programs are left alone; no startup service,
@@ -49,11 +49,10 @@ ssh -N -L 8765:127.0.0.1:8765 crt@100.95.114.100
 ```
 
 Open [http://127.0.0.1:8765](http://127.0.0.1:8765), enable controller input,
-center sticks with RB released, then hold RB to drive. Release RB to stop;
+center sticks with RB released, then press RB once to enable driving. Press it again to disable;
 Ctrl-C stops the launch. Use this with the robot in water and people clear.
 See [the Xbox guide](../../docs/software/gamepad.md) for controls and limits.
 
 Omit `--execute` for previews without opening USB. The live path bypasses PX4
-and requires the existing Teensy Serial1 image. Do not run a USB pulse or PX4
-relay alongside it. All six motor slots use the supplied order:
+and requires the existing Teensy Serial1 image. Do not run a USB pulse alongside it. All six motor slots use the supplied order:
 0=FR, 1=FL, 2=BR, 3=BL, 4=RD, 6=LD; protocol slots 5 and 7 stay neutral.

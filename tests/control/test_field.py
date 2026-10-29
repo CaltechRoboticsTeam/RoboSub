@@ -11,10 +11,13 @@ from types import SimpleNamespace
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_control"))
+sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(ROOT / "tools/diagnostics"))
 sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_sim"))
 sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_bringup"))
 
-from robosub_bringup.field_checks import (  # noqa: E402
+from field_checks import (  # noqa: E402
     check_outputs,
     json_finite,
     manual_values,
@@ -160,7 +163,7 @@ class FieldRosTests(unittest.TestCase):
         from rcl_interfaces.srv import GetParameters
         from rclpy.executors import SingleThreadedExecutor
         from rclpy.node import Node
-        from robosub_bringup.field_monitor import FieldMonitor
+        from field_monitor import FieldMonitor
 
         os.environ["ROS_DOMAIN_ID"] = "198"
         os.environ["ROS_LOCALHOST_ONLY"] = "1"
@@ -262,7 +265,7 @@ class FieldRosTests(unittest.TestCase):
         self.assertFalse(self.arm_calls)
 
     def test_short_executed_pulse_returns_neutral_and_confirms_disarm(self):
-        from robosub_bringup.field_test import PulseTest
+        from diagnostics.field_test import PulseTest
 
         pulse = PulseTest(self.monitor, pulse_plan("throttle", 0.05, 0.1, 0.1))
         pulse.run()
@@ -274,7 +277,7 @@ class FieldRosTests(unittest.TestCase):
         self.assertEqual(pulse.events[-1], "disarming_confirmed")
 
     def test_output_excursion_aborts_and_disarms(self):
-        from robosub_bringup.field_test import PulseTest
+        from diagnostics.field_test import PulseTest
 
         self.bad_output = True
         pulse = PulseTest(self.monitor, pulse_plan("throttle", 0.05, 0.1, 0.1))

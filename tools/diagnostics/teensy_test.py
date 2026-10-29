@@ -7,7 +7,7 @@ from pathlib import Path
 import signal
 import time
 
-from robosub_bringup.teensy_usb import (
+from robosub_control.drivers.teensy_usb import (
     DEVICE,
     MAX_DELTA_US,
     NEUTRAL_US,
@@ -242,3 +242,7 @@ def main(args=None):
             options.output.write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report, indent=2))
     return 0 if success else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

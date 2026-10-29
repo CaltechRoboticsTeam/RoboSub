@@ -41,8 +41,8 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64
 
-from robosub_sim import constants
-from robosub_sim.vehicle_profiles import profile_from_node
+from robosub_control.config import constants
+from robosub_control.config.vehicle_profiles import profile_from_node
 
 
 class DvlSensor(Node):

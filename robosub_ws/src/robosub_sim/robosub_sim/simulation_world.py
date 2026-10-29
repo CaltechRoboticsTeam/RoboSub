@@ -4,8 +4,8 @@ import math
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-from robosub_sim.t200 import T200Model
-from robosub_sim.vehicle_profiles import get_profile
+from robosub_control.thrusters.t200 import T200Model
+from robosub_control.config.vehicle_profiles import get_profile
 
 
 def configured_world(source, mesh_directory, vehicle="current_m5"):

@@ -1,35 +1,34 @@
-"""Xbox stick mapping and enable/watchdog state, independent of ROS."""
+"""Xbox input mapping and movement toggle, independent of ROS."""
 
 import math
 from numbers import Real
 
-from robosub_sim import constants
+from robosub_control.config import constants
 
-ZERO = (0.0, 0.0, 0.0, 0.0)
+ZERO = (0.0, 0.0, 0.0, 0.0, 0.0)
 
 
 def validate_axes(axes):
-    """Read the two sticks; ignore extra SDL trigger axes."""
-    if len(axes) < 4:
-        raise ValueError("Expected left X/Y and right X/Y axes")
-    values = tuple(axes[:4])
+    """Validate the two sticks and two normalized browser triggers."""
+    if len(axes) != 6:
+        raise ValueError("Expected four stick axes followed by LT and RT")
+    values = tuple(axes)
     if any(
         isinstance(value, bool)
         or not isinstance(value, Real)
         or not math.isfinite(value)
         or abs(value) > 1.0
         for value in values
-    ):
-        raise ValueError("Stick axes must be finite numbers between -1 and 1")
+    ) or any(value < 0 for value in values[4:]):
+        raise ValueError("Invalid stick or trigger values")
     return values
 
 
 class GamepadControl:
-    """Map an explicitly selected layout into body surge, sway, heave, yaw.
+    """Map input to surge/sway/heave/roll/yaw; RB edges toggle movement.
 
-    Each reconnect/timeout requires neutral sticks with RB released before
-    movement can be enabled. Freshness uses monotonic wall time, including
-    when Gazebo is paused. Efforts are normalized, not speed setpoints.
+    Startup, invalid input and timeouts require neutral controls with RB
+    released, followed by a new press. Releasing RB leaves movement enabled.
     """
 
     def __init__(self, source, max_effort=constants.GAMEPAD_MAX_EFFORT):
@@ -52,29 +51,40 @@ class GamepadControl:
     def stop(self):
         self.ready = False
         self.enabled = False
+        self.pressed = False
         self.last_rx = None
         self.command = ZERO
 
     def accept(self, axes, buttons, now):
         try:
-            values = validate_axes(axes)
+            # ROS SDL inverts trigger axes: released=0, pressed=-1.
+            values = list(axes)
+            if self.source == "local" and len(values) == 6:
+                values[4:] = [-value for value in values[4:]]
+            values = validate_axes(values)
             index = constants.GAMEPAD_ENABLE_BUTTON[self.source]
             if len(buttons) <= index or type(buttons[index]) is not int:
-                raise ValueError("Missing/invalid RB enable button")
+                raise ValueError("Missing/invalid RB button")
             if buttons[index] not in (0, 1):
                 raise ValueError("RB button must be zero or one")
         except (ValueError, TypeError, OverflowError):
             self.stop()
             raise ValueError("Invalid gamepad input") from None
-        # Check here too: a new input can arrive before the watchdog timer.
         self.sample(now)
         self.last_rx = now
-        if not buttons[index]:
-            self.ready = all(abs(value) <= self.deadzone for value in values)
-            self.enabled = False
+        pressed = bool(buttons[index])
+        neutral = all(abs(value) <= self.deadzone for value in values)
+        rising = pressed and not self.pressed
+        self.pressed = pressed
+        if not self.ready:
+            self.ready = neutral and not pressed
             self.command = ZERO
             return
-        self.enabled = self.ready
+        if rising:
+            if self.enabled:
+                self.enabled = False
+            elif neutral:
+                self.enabled = True
         if not self.enabled:
             self.command = ZERO
             return
@@ -83,12 +93,11 @@ class GamepadControl:
             magnitude = max(0.0, abs(value) - self.deadzone)
             return math.copysign(magnitude / (1.0 - self.deadzone), value)
 
-        # Browser axes are right/down positive. ROS SDL axes are left/up
-        # positive; game_controller_node has already inverted SDL's axes.
         polarity = -1.0 if self.source == "browser" else 1.0
         left_x, left_y, right_x, right_y = (
-            polarity * axis(value) for value in values
+            polarity * axis(value) for value in values[:4]
         )
+        left_trigger, right_trigger = (axis(value) for value in values[4:])
         translation = max(1.0, math.hypot(left_x, left_y))
         self.command = tuple(
             self.max_effort * value
@@ -96,6 +105,7 @@ class GamepadControl:
                 left_y / translation,
                 left_x / translation,
                 right_y,
+                right_trigger - left_trigger,
                 right_x,
             )
         )

@@ -72,6 +72,7 @@ Parameters
     depth_tau      depth low-pass time constant, s        (default 0.08)
     heave_tau      heave-rate low-pass time constant, s   (default 0.25)
 """
+
 import math
 
 from geometry_msgs.msg import TwistWithCovarianceStamped, Vector3Stamped
@@ -81,9 +82,9 @@ from rclpy.node import Node
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float64
 
-from robosub_sim import constants
-from robosub_sim.tuning import TunableNumbers, fixed_parameter
-from robosub_sim.vehicle_profiles import profile_from_node
+from robosub_control.config import constants
+from robosub_control.utils.tuning import TunableNumbers, fixed_parameter
+from robosub_control.config.vehicle_profiles import profile_from_node
 
 G = 9.81
 
@@ -92,23 +93,27 @@ G = 9.81
 def q_mult(a, b):
     aw, ax, ay, az = a
     bw, bx, by, bz = b
-    return (aw*bw - ax*bx - ay*by - az*bz,
-            aw*bx + ax*bw + ay*bz - az*by,
-            aw*by - ax*bz + ay*bw + az*bx,
-            aw*bz + ax*by - ay*bx + az*bw)
+    return (
+        aw * bw - ax * bx - ay * by - az * bz,
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+    )
 
 
 def q_normalize(q):
-    n = math.sqrt(sum(c*c for c in q))
+    n = math.sqrt(sum(c * c for c in q))
     return tuple(c / n for c in q)
 
 
 def world_up_in_body(q):
     """Rotate the world's +z into the body frame: R(q)^T * (0, 0, 1)."""
     w, x, y, z = q
-    return (2*(x*z - w*y),
-            2*(y*z + w*x),
-            w*w - x*x - y*y + z*z)
+    return (
+        2 * (x * z - w * y),
+        2 * (y * z + w * x),
+        w * w - x * x - y * y + z * z,
+    )
 
 
 def rotate(q, v):
@@ -116,18 +121,22 @@ def rotate(q, v):
     w, x, y, z = q
     vx, vy, vz = v
     # t = 2 * (q_vec x v)
-    tx = 2*(y*vz - z*vy); ty = 2*(z*vx - x*vz); tz = 2*(x*vy - y*vx)
-    return (vx + w*tx + (y*tz - z*ty),
-            vy + w*ty + (z*tx - x*tz),
-            vz + w*tz + (x*ty - y*tx))
+    tx = 2 * (y * vz - z * vy)
+    ty = 2 * (z * vx - x * vz)
+    tz = 2 * (x * vy - y * vx)
+    return (
+        vx + w * tx + (y * tz - z * ty),
+        vy + w * ty + (z * tx - x * tz),
+        vz + w * tz + (x * ty - y * tx),
+    )
 
 
 def q_to_rpy(q):
     w, x, y, z = q
-    roll = math.atan2(2*(w*x + y*z), 1 - 2*(x*x + y*y))
-    s = max(-1.0, min(1.0, 2*(w*y - z*x)))
+    roll = math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
+    s = max(-1.0, min(1.0, 2 * (w * y - z * x)))
     pitch = math.asin(s)
-    yaw = math.atan2(2*(w*z + x*y), 1 - 2*(y*y + z*z))
+    yaw = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
     return roll, pitch, yaw
 
 
@@ -137,18 +146,26 @@ def stamp_to_sec(stamp):
 
 class StateEstimator(Node):
     def __init__(self):
-        super().__init__('state_estimator')
+        super().__init__("state_estimator")
         profile = profile_from_node(self)
-        self.r_dvl = [float(value) for value in fixed_parameter(
-            self, 'dvl_offset', list(profile.DVL_POSITION_BODY_M))]
-        self.dvl_timeout = float(fixed_parameter(
-            self, 'dvl_timeout', constants.ESTIMATOR_DEFAULTS['dvl_timeout']))
+        self.r_dvl = [
+            float(value)
+            for value in fixed_parameter(
+                self, "dvl_offset", list(profile.DVL_POSITION_BODY_M)
+            )
+        ]
+        self.dvl_timeout = float(
+            fixed_parameter(
+                self, "dvl_timeout", constants.ESTIMATOR_DEFAULTS["dvl_timeout"]
+            )
+        )
         self.tuning = TunableNumbers(self)
-        for name in ('kp', 'ki', 'depth_tau', 'heave_tau'):
+        for name in ("kp", "ki", "depth_tau", "heave_tau"):
             number = self.tuning.number(
-                name, constants.ESTIMATOR_DEFAULTS[name],
-                minimum=1e-6 if name.endswith('_tau') else 0.0,
-                description=name.replace('_', ' '),
+                name,
+                constants.ESTIMATOR_DEFAULTS[name],
+                minimum=1e-6 if name.endswith("_tau") else 0.0,
+                description=name.replace("_", " "),
             )
             setattr(self, name, number.get())
             number.bind_to(self, name)
@@ -160,28 +177,37 @@ class StateEstimator(Node):
         self.last_imu_t = None
 
         # Depth state.
-        self.depth = None          # filtered, m, +down
-        self.heave_up = 0.0        # m/s, +up
+        self.depth = None  # filtered, m, +down
+        self.heave_up = 0.0  # m/s, +up
         self.last_depth_t = None
         self.last_depth_raw_t = None
 
         # Position state (DVL).
         self.x = 0.0
         self.y = 0.0
-        self.v_body = (0.0, 0.0, 0.0)   # last DVL body velocity, lever arm removed
+        self.v_body = (
+            0.0,
+            0.0,
+            0.0,
+        )  # last DVL body velocity, lever arm removed
         self.v_world_prev = None
-        self.last_dvl_t = None          # message stamp, for integration dt
-        self.last_dvl_rx = None         # node clock, for the timeout
+        self.last_dvl_t = None  # message stamp, for integration dt
+        self.last_dvl_rx = None  # node clock, for the timeout
 
-        self.pub_state = self.create_publisher(Odometry, '/sub/state', 10)
-        self.pub_rpy = self.create_publisher(Vector3Stamped, '/sub/state/rpy', 10)
-        self.create_subscription(Imu, '/imu/data_raw', self.on_imu, 50)
-        self.create_subscription(Float64, '/depth', self.on_depth, 50)
-        self.create_subscription(TwistWithCovarianceStamped, '/dvl/velocity', self.on_dvl, 20)
+        self.pub_state = self.create_publisher(Odometry, "/sub/state", 10)
+        self.pub_rpy = self.create_publisher(
+            Vector3Stamped, "/sub/state/rpy", 10
+        )
+        self.create_subscription(Imu, "/imu/data_raw", self.on_imu, 50)
+        self.create_subscription(Float64, "/depth", self.on_depth, 50)
+        self.create_subscription(
+            TwistWithCovarianceStamped, "/dvl/velocity", self.on_dvl, 20
+        )
 
         self.get_logger().info(
-            f'state_estimator up: /imu/data_raw + /depth -> /sub/state '
-            f'(kp={self.kp}, ki={self.ki}); yaw starts at 0 here')
+            f"state_estimator up: /imu/data_raw + /depth -> /sub/state "
+            f"(kp={self.kp}, ki={self.ki}); yaw starts at 0 here"
+        )
 
     # ---------------------------------------------------------------- depth
     def on_depth(self, msg: Float64):
@@ -212,9 +238,11 @@ class StateEstimator(Node):
         wx, wy, wz = self.rates
         rx, ry, rz = self.r_dvl
         # The DVL saw v_dvl = v_body + omega x r. Undo the lever arm.
-        vb = (v.x - (wy*rz - wz*ry),
-              v.y - (wz*rx - wx*rz),
-              v.z - (wx*ry - wy*rx))
+        vb = (
+            v.x - (wy * rz - wz * ry),
+            v.y - (wz * rx - wx * rz),
+            v.z - (wx * ry - wy * rx),
+        )
         self.v_body = vb
         vw = rotate(self.q, vb)
         if self.last_dvl_t is not None:
@@ -227,8 +255,11 @@ class StateEstimator(Node):
         self.v_world_prev = vw
 
     def dvl_fresh(self):
-        return (self.last_dvl_rx is not None and
-                self.get_clock().now().nanoseconds * 1e-9 - self.last_dvl_rx < self.dvl_timeout)
+        return (
+            self.last_dvl_rx is not None
+            and self.get_clock().now().nanoseconds * 1e-9 - self.last_dvl_rx
+            < self.dvl_timeout
+        )
 
     # ------------------------------------------------------------------ imu
     def on_imu(self, msg: Imu):
@@ -247,13 +278,13 @@ class StateEstimator(Node):
 
         # Accelerometer correction. Only trust it when the magnitude looks
         # like gravity alone (the sub is slow, so this is nearly always).
-        norm = math.sqrt(a.x*a.x + a.y*a.y + a.z*a.z)
-        if 0.5*G < norm < 1.5*G:
-            ax, ay, az = a.x/norm, a.y/norm, a.z/norm
+        norm = math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z)
+        if 0.5 * G < norm < 1.5 * G:
+            ax, ay, az = a.x / norm, a.y / norm, a.z / norm
             vx, vy, vz = world_up_in_body(self.q)
-            ex = ay*vz - az*vy
-            ey = az*vx - ax*vz
-            ez = ax*vy - ay*vx
+            ex = ay * vz - az * vy
+            ey = az * vx - ax * vz
+            ez = ax * vy - ay * vx
             self.bias[0] -= self.ki * ex * dt
             self.bias[1] -= self.ki * ey * dt
             self.bias[2] -= self.ki * ez * dt
@@ -263,8 +294,14 @@ class StateEstimator(Node):
 
         # Integrate: q_dot = 0.5 * q (x) (0, omega_body)
         dq = q_mult(self.q, (0.0, gx, gy, gz))
-        self.q = q_normalize(tuple(c + 0.5*d*dt for c, d in zip(self.q, dq)))
-        self.rates = (w.x - self.bias[0], w.y - self.bias[1], w.z - self.bias[2])
+        self.q = q_normalize(
+            tuple(c + 0.5 * d * dt for c, d in zip(self.q, dq))
+        )
+        self.rates = (
+            w.x - self.bias[0],
+            w.y - self.bias[1],
+            w.z - self.bias[2],
+        )
 
         self.publish(msg.header.stamp)
 
@@ -275,13 +312,15 @@ class StateEstimator(Node):
 
         odom = Odometry()
         odom.header.stamp = stamp
-        odom.header.frame_id = 'world'
-        odom.child_frame_id = 'base_link'
+        odom.header.frame_id = "world"
+        odom.child_frame_id = "base_link"
         fresh = self.dvl_fresh()
         if not fresh:
             self.v_body = (0.0, 0.0, 0.0)
             self.v_world_prev = None
-            self.get_logger().warn('no DVL: position frozen', throttle_duration_sec=5.0)
+            self.get_logger().warn(
+                "no DVL: position frozen", throttle_duration_sec=5.0
+            )
         odom.pose.pose.position.x = self.x
         odom.pose.pose.position.y = self.y
         odom.pose.pose.position.z = -self.depth
@@ -314,13 +353,13 @@ def main():
     except KeyboardInterrupt:
         pass
     except Exception:
-        if rclpy.ok():          # a real error; a SIGTERM mid-spin is not
+        if rclpy.ok():  # a real error; a SIGTERM mid-spin is not
             raise
     finally:
         node.destroy_node()
-        if rclpy.ok():          # a SIGTERM already shut the context down
+        if rclpy.ok():  # a SIGTERM already shut the context down
             rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

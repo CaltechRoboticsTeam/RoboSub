@@ -16,7 +16,7 @@ from launch.event_handlers import OnShutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
-from robosub_sim import constants
+from robosub_control.config import constants
 from robosub_sim.simulation_world import configured_world
 
 
@@ -80,7 +80,10 @@ def generate_launch_description():
     ]
     vehicle = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            str(package / "launch/vehicle.launch.py")
+            str(
+                Path(get_package_share_directory("robosub_control"))
+                / "launch/vehicle.launch.py"
+            )
         ),
         launch_arguments={
             "vehicle": LaunchConfiguration("vehicle"),

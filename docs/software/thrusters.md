@@ -5,10 +5,11 @@ M5 thrusters. The future Pixhawk-free T200 submarine has its own saved profile.
 
 | Profile | Settings | Command | Geometry status |
 | --- | --- | --- | --- |
-| `current_m5` | `robosub_sim/current_m5.py` | Normalized M5 power, -1 to +1 | User-supplied current mounts |
-| `future_t200` | `robosub_sim/future_t200.py` | T200 force in N, then Basic ESC PWM | Planning copy; future mounts unconfirmed |
+| `current_m5` | `robosub_control/config/current_m5.py` | Normalized M5 power, -1 to +1 | User-supplied current mounts |
+| `future_t200` | `robosub_control/config/future_t200.py` | T200 force in N, then Basic ESC PWM | Planning copy; future mounts unconfirmed |
 
-Both settings files are inside `robosub_ws/src/robosub_sim/robosub_sim/`.
+Both settings files are inside
+`robosub_ws/src/robosub_control/robosub_control/config/`.
 Common control/tuning/timeouts remain in `constants.py`. The saved T200
 performance data, voltage interpolation, current bounds, PWM mapping and
 startup hold are documented in [T200 thrusters and PWM](thrusters-t200.md).

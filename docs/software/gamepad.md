@@ -9,14 +9,17 @@ Xbox mapping, mixer and selected vehicle command stage.
 | Left left / right | Strafe left / right | +Y left |
 | Right left / right | Turn left / right | +yaw left |
 | Right up / down | Rise / descend | +Z up |
+| RT / LT | Roll right / left | +roll right |
 
 Translation follows the robot's heading, like robot-relative FRC swerve.
 These are normalized effort commands, not requested speeds or depth targets.
-Hold **RB** to enable movement. Start with both sticks centered and RB
-released; release RB to stop. The default maximum effort is 50%. Set
+Start with both sticks centered, triggers released and RB released.
+**Press RB once to enable movement; press it again to disable movement.**
+RT rolls right; LT rolls left, proportional to trigger squeeze. Equal trigger
+inputs cancel. Releasing RB leaves movement enabled. The default maximum effort is 50%. Set
 `teleop_scale:=1.0` for the full normalized range, or a smaller positive value
 for a lower limit. Deadzone, timeout, button mapping and defaults live in
-`robosub_sim/robosub_sim/constants.py`.
+`robosub_control/robosub_control/config/constants.py`.
 
 ## Controller on the Mac, connected to the Jetson
 
@@ -32,7 +35,7 @@ Deploy from the Mac repository root when the source changes:
 
 For driving, put the robot in the water, keep people clear of the thrusters,
 and have propulsion power removal available. Pair the controller to the Mac.
-Stop any existing joystick launch, USB test or relay before starting another.
+Stop any existing joystick launch or USB diagnostic before starting another.
 
 In Mac Terminal 1, connect to the Jetson and start the live driver:
 
@@ -61,8 +64,9 @@ The HTML is served by ROS; do not open `tuning.html` as a local file.
 1. Keep the page focused and press a controller button to make it appear.
 2. Select the controller and click **Enable controller input**.
 3. Center both sticks and release RB once.
-4. Hold **RB** and move the sticks to drive relative to the robot's front.
-5. Release **RB** to request stop. Use Ctrl-C in Terminal 1 to stop the stack.
+4. Press **RB** once, then move the sticks to drive relative to the robot's front.
+   RT rolls right and LT rolls left.
+5. Press **RB** again or click **Disable controller input** to request stop. Use Ctrl-C in Terminal 1 to stop the stack.
 
 M5 motor IDs are **0=FR, 1=FL, 2=BR, 3=BL, 4=RD, 6=LD**.
 The page shows body efforts and the actual USB-acknowledged motor powers after
@@ -93,7 +97,7 @@ No public port or ROS installation on the Mac is needed.
 On the Mac, edit:
 
 ```text
-robosub_ws/src/robosub_sim/robosub_sim/current_m5.py
+robosub_ws/src/robosub_control/robosub_control/config/current_m5.py
 ```
 
 Change the numbers in `M5_MOTOR_IDS`:
@@ -153,7 +157,8 @@ input devices to work around a controller permission problem.
 Inside the ROS environment:
 
 ```bash
-colcon build --symlink-install --packages-select robosub_sim robosub_bringup
+colcon build --symlink-install --packages-select \
+  robosub_control robosub_sim robosub_bringup
 source install/setup.bash
 ros2 launch robosub_bringup robot.launch.py mode:=sim teleop:=local tuning:=true
 ```
@@ -182,22 +187,24 @@ Linux SDL game_controller_node -> Joy input
   -> optional teensy_actuators -> USB -> Serial1 -> M5
 ```
 
-The mapper validates input and applies a continuous 8% deadzone. Translation
+The mapper validates four stick axes and two triggers, and applies a
+continuous 8% deadzone. Translation
 magnitude is bounded on diagonals. Browser and ROS SDL layouts have different
 axis signs and RB button indices; the selected source handles that difference.
 The generic `joy_node` has device-dependent ordering and is not substituted
 for `game_controller_node`.
 
-Xbox mode gives the command topic to manual control. Automatic hold loops do
-not publish, even if a setpoint arrives, and launch rejects `mission:=true`
+Xbox mode gives the command topic to manual control. Automatic hold and
+estimation nodes are omitted, and launch rejects `mission:=true`
 with teleop enabled. The old surge/sway `/sub/cmd_vel_manual` interface remains
 available in normal `teleop:=off` operation. To use hold/mission mode, restart
 with teleop off. Releasing the sticks requests zero effort, not position hold;
 buoyancy, inertia and currents can still move the submarine.
 
-Input stops on RB release, invalid joystick data or a 0.25-second input timeout
-plus scheduling delay. The watchdog uses monotonic wall time even if simulation
-is paused. Reconnection requires centering and releasing RB again. The Mac
+Movement disables on another RB press, invalid joystick data or a 0.25-second input timeout
+plus scheduling delay. All of these reset the toggle; reconnecting cannot
+resume movement until controls are neutral and RB is pressed again. The watchdog uses monotonic wall time even if simulation
+is paused. Reconnection requires neutral sticks/triggers and RB released, then a new press. The Mac
 page also disables on lost focus, hidden page, controller disconnect, or HTTP
 failure. A sequence check discards delayed input older than a stop; one browser
 holds a short input lease to prevent two pages from driving simultaneously.

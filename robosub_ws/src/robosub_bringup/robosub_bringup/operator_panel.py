@@ -4,9 +4,9 @@ import threading
 import time
 
 from geometry_msgs.msg import Twist
-from robosub_sim import constants
-from robosub_sim.tuning import fixed_parameter
-from robosub_sim.vehicle_profiles import profile_from_node
+from robosub_control.config import constants
+from robosub_control.utils.tuning import fixed_parameter
+from robosub_control.config.vehicle_profiles import profile_from_node
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool, Float64MultiArray, UInt16MultiArray
 
@@ -58,6 +58,7 @@ class OperatorPanel:
                 message.linear.x,
                 message.linear.y,
                 message.linear.z,
+                message.angular.x,
                 message.angular.z,
             ],
         )
@@ -68,6 +69,9 @@ class OperatorPanel:
 
     def publish_joy(self, axes, held):
         message = Joy()
+        if not axes:
+            self.publisher.publish(message)
+            return
         message.header.stamp = self.node.get_clock().now().to_msg()
         message.axes = [float(value) for value in axes]
         index = constants.GAMEPAD_ENABLE_BUTTON["browser"]

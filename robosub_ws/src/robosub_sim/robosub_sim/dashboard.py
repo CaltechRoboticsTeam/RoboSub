@@ -26,7 +26,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float64
 
-from robosub_sim.vehicle_profiles import profile_from_node
+from robosub_control.config.vehicle_profiles import profile_from_node
 
 W = 40   # column width
 

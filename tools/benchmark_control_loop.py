@@ -24,13 +24,15 @@ def main():
     os.environ["ROS_DOMAIN_ID"] = "198"
     os.environ["ROS_LOCALHOST_ONLY"] = "1"
     root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(root / "robosub_ws/src/robosub_sim"))
+    sys.path.insert(0, str(root / "robosub_ws/src/robosub_control"))
     from geometry_msgs.msg import Twist
     from nav_msgs.msg import Odometry
     import rclpy
     from rclpy.executors import SingleThreadedExecutor
     from rclpy.node import Node
-    from robosub_sim.depth_heading_controller import DepthHeadingController
+    from robosub_control.autonomy.depth_heading_controller import (
+        DepthHeadingController,
+    )
 
     rclpy.init(
         args=[

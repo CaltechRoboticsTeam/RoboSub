@@ -25,11 +25,6 @@ setup(
     entry_points={
         "console_scripts": [
             "tuning_menu = robosub_bringup.tuning_menu:main",
-            "xbox_teleop = robosub_bringup.xbox_teleop:main",
-            "field_test = robosub_bringup.field_test:main",
-            "teensy_test = robosub_bringup.teensy_test:main",
-            "teensy_relay = robosub_bringup.teensy_relay:main",
-            "teensy_actuators = robosub_bringup.teensy_actuators:main",
         ],
     },
 )

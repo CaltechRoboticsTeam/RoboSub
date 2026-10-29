@@ -7,7 +7,7 @@ still require verification on this vehicle.
 
 import math
 
-from robosub_sim.thruster_layout import (
+from robosub_control.config.thruster_layout import (
     THRUSTER_NAMES as THRUSTER_NAMES,
     THRUSTER_TOPIC_IDS as THRUSTER_TOPIC_IDS,
     THRUSTERS as THRUSTERS,

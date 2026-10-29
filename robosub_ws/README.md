@@ -2,6 +2,7 @@
 
 For the separate ZED 2i perception launch and calibration workflow, see
 [underwater vision](../docs/software/vision.md).
+For a file-by-file guide, see [the control code map](../docs/software/control.md).
 For the master launcher and developer menu, see
 [robot startup and tuning](../docs/software/runtime.md).
 For deployment and current-submarine MAVROS checks, see
@@ -24,7 +25,8 @@ physical drivers, sensor mounting, calibration or controller tuning.
 ## Quick start
 ```bash
 ./run.sh                      # build/enter the container
-colcon build --symlink-install --packages-select robosub_sim robosub_bringup
+colcon build --symlink-install --packages-select \
+  robosub_control robosub_sim robosub_bringup
 source install/setup.bash
 ros2 launch robosub_bringup robot.launch.py mode:=sim
 ```
@@ -57,17 +59,17 @@ rqt_image_view /sub/camera/image_raw
 | `src/robosub_bringup/launch/robot.launch.py` | Master entry: sim/real, vision, mission and tuning |
 | `src/robosub_sim/worlds/pool.sdf` | Pool, water, sub, gate |
 | `src/robosub_sim/config/bridge.yaml` | Gazebo topics <-> ROS topics |
-| `src/robosub_sim/robosub_sim/thruster_mixer.py` | Control allocation |
-| `src/robosub_sim/robosub_sim/actuator_commands.py` | M5 power / T200 PWM preview and simulated response |
+| `src/robosub_control/robosub_control/thrusters/thruster_mixer.py` | Control allocation |
+| `src/robosub_control/robosub_control/thrusters/actuator_commands.py` | M5 power / T200 PWM preview and simulated response |
 | `src/robosub_sim/robosub_sim/depth_sensor.py` | Altimeter -> `/depth` (stand-in for the pressure sensor driver) |
 | `src/robosub_sim/robosub_sim/dvl_sensor.py` | Ground truth -> `/dvl/velocity`, `/dvl/altitude` (stand-in for the Pathfinder DVL driver) |
-| `src/robosub_sim/robosub_sim/state_estimator.py` | `/imu/data_raw` + `/depth` + `/dvl/velocity` -> `/sub/state` (attitude, depth, x/y) |
-| `src/robosub_sim/robosub_sim/depth_heading_controller.py` | PID depth + heading + position hold -> `/sub/cmd_vel` |
-| `src/robosub_sim/launch/vehicle.launch.py` | Shared movement stack and previews |
-| `src/robosub_bringup/robosub_bringup/teensy_actuators.py` | Optional real M5 USB output |
+| `src/robosub_control/robosub_control/autonomy/state_estimator.py` | `/imu/data_raw` + `/depth` + `/dvl/velocity` -> `/sub/state` (attitude, depth, x/y) |
+| `src/robosub_control/robosub_control/autonomy/depth_heading_controller.py` | PID depth + heading + position hold -> `/sub/cmd_vel` |
+| `src/robosub_control/launch/vehicle.launch.py` | Shared movement stack and previews |
+| `src/robosub_control/robosub_control/drivers/teensy_actuators.py` | Optional real M5 USB output |
 | `src/robosub_sim/launch/pool.launch.py` | The sim: Gazebo + bridge + sensor stand-ins + `vehicle.launch.py` |
 | `src/robosub_sim/robosub_sim/dashboard.py` | Live terminal view: sensors | estimator | commands | thrust, with rates |
-| `src/robosub_sim/robosub_sim/mission.py` | Scripted missions: `dive`, `heading`, `move`, `goto`, `roll`, `wait`, `surface` |
+| `src/robosub_control/robosub_control/autonomy/mission.py` | Scripted missions: `dive`, `heading`, `move`, `goto`, `roll`, `wait`, `surface` |
 
 ## Topics
 | ROS topic | Type | Direction |
@@ -178,8 +180,8 @@ It only publishes setpoints and watches `/sub/state`, so it runs unchanged on
 the vehicle.
 
 ```bash
-ros2 run robosub_sim mission                      # dive 1.5, forward 3 m, back to origin
-ros2 run robosub_sim mission --ros-args -p "mission:=['dive 2','heading 90','move 2','roll 1','goto 0 0','surface']"
+ros2 run robosub_control mission                      # dive 1.5, forward 3 m, back to origin
+ros2 run robosub_control mission --ros-args -p "mission:=['dive 2','heading 90','move 2','roll 1','goto 0 0','surface']"
 ```
 
 Steps: `dive D` (m), `heading A` (deg, 0 = start heading, + = left), `move M`
@@ -202,7 +204,7 @@ There is no robot startup service yet.
 Use the vision Python environment and interpreter command in the runtime guide.
 
 Movement tuning defaults live in
-`src/robosub_sim/robosub_sim/constants.py`. Current measured mounts and M5
+`src/robosub_control/robosub_control/config/constants.py`. Current measured mounts and M5
 settings live in `current_m5.py`; saved future T200 settings live in
 `future_t200.py` in the same folder. The master defaults to
 `vehicle:=current_m5`; select `vehicle:=future_t200` for the planning profile.

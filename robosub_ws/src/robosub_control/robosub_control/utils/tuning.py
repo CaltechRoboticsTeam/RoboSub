@@ -13,8 +13,8 @@ from rcl_interfaces.msg import (
 from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
-from robosub_sim import constants
-from robosub_sim.tunable_number import TunableNumber
+from robosub_control.config import constants
+from robosub_control.utils.tunable_number import TunableNumber
 
 
 def fixed_parameter(node, name, default):

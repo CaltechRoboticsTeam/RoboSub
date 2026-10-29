@@ -20,8 +20,8 @@ from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from robosub_sim import constants
-from robosub_sim.vehicle_profiles import get_profile
+from robosub_control.config import constants
+from robosub_control.config.vehicle_profiles import get_profile
 
 
 def include(package, filename, arguments):
@@ -87,7 +87,7 @@ def start(context):
         raise ValueError(f"Tuning file does not exist: {tuning_file}")
     if tuning_file and not tuning:
         raise ValueError("tuning_file requires tuning:=true")
-
+    #Edge cases have been handled. Time to build the actual launch description. The rest of the code is just actual routing, and SHOULD be self explanatory.
     shared = {
         "vehicle": profile.NAME,
         "manual_control": str(teleop != "off").lower(),
@@ -116,13 +116,15 @@ def start(context):
                     "manual control uses body efforts directly."
                 )
             ),
+            #Get our State estimator and Depth/Heading controller running/listening for their inputs, as well as actuator_commands and how we do thruster mixing (this will be needed for any mission in Real)
             include(
-                "robosub_sim",
+                "robosub_control",
                 "vehicle.launch.py",
                 {
                     **shared,
                     "use_sim_time": "false",
                     "simulate_actuators": "false",
+                    "preview_commands": str(not physical).lower(),
                 },
             ),
         ]
@@ -147,18 +149,20 @@ def start(context):
             )
         )
     if mission:
+        #if auto, do auto.
         actions.append(
             Node(
-                package="robosub_sim",
+                package="robosub_control",
                 executable="mission",
                 output="screen",
                 parameters=[{"use_sim_time": simulated}],
             )
         )
     if teleop != "off":
+        #Listen for Xbox controller commands from the operator computer, and send them to the thruster mixer. This is how we actually control the vehicle in real life.
         actions.append(
             Node(
-                package="robosub_bringup",
+                package="robosub_control",
                 executable="xbox_teleop",
                 output="screen",
                 parameters=[
@@ -171,6 +175,7 @@ def start(context):
             )
         )
     if teleop == "local":
+        #shouldn't ever happen, but Codex wrote this which supports a USB controller plugged into the Jetson. This is a fallback in case the Xbox controller isn't working over the network.
         try:
             get_package_share_directory("joy")
         except PackageNotFoundError as error:
@@ -199,6 +204,8 @@ def start(context):
             )
         )
     if tuning or teleop != "off":
+        # Use the tuning menu to adjust the controller gains and see the effects in real time. 
+        #Access via ssh -N -L 8765:127.0.0.1:8765 crt@100.95.114.100
         port = int(argument("tuning_port"))
         if not 1 <= port <= 65535:
             raise ValueError("tuning_port must be between 1 and 65535")
@@ -220,9 +227,12 @@ def start(context):
                 ],
             )
         )
+    # If we're in physical mode (THIS ISN'T A "systems" test, we ACTUALLY want motor output), we need to start the Teensy actuator driver.
+    # this will listen for target efforts from anything, and send them to the Teensy over Serial1. It will also publish the actual motor efforts back to ROS.
+    # without this, the Teensy will not receive any commands and the motors will not move, regardless of whether the thruster_mixer is running or not. This allows for previewing the commands IN REAL without actually destroying the motors.
     if physical:
         driver = Node(
-            package="robosub_bringup",
+            package="robosub_control",
             executable="teensy_actuators",
             output="screen",
             parameters=[
@@ -248,6 +258,8 @@ def start(context):
 
 
 def generate_launch_description():
+    '''Ask
+    the user for the vehicle profile, simulation mode, and teleop mode, then start the appropriate nodes.'''
     return LaunchDescription(
         [
             DeclareLaunchArgument(

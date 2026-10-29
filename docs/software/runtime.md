@@ -1,9 +1,13 @@
 # Robot startup and tuning
 
-Start with `robosub_ws/src/robosub_bringup/launch/robot.launch.py`. It selects
-the I/O environment and includes smaller launch descriptions. Both modes run
-the same `state_estimator`, `depth_heading_controller`, `thruster_mixer` and
-`actuator_commands` executables through `robosub_sim/launch/vehicle.launch.py`.
+Start with `robosub_ws/src/robosub_bringup/launch/robot.launch.py`.
+Shared logic lives in `robosub_control`; Gazebo-specific code lives in
+`robosub_sim`. See [the control code map](control.md) for individual files.
+
+Live browser driving starts four nodes: `tuning_menu`, `xbox_teleop`,
+`thruster_mixer` and `teensy_actuators`. Manual mode omits state estimation
+and automatic hold. Preview mode runs `actuator_commands` instead of the
+physical driver. Automatic mode adds the estimator and hold controller.
 
 ## Build and run
 
@@ -11,7 +15,8 @@ In a ROS Humble environment, from the repository root:
 
 ```bash
 cd robosub_ws
-colcon build --symlink-install --packages-select robosub_sim robosub_bringup
+colcon build --symlink-install --packages-select \
+  robosub_control robosub_sim robosub_bringup
 source install/setup.bash
 ros2 launch robosub_bringup robot.launch.py mode:=sim
 ```
@@ -88,7 +93,7 @@ panel is enabled.
 The server binds to robot loopback; the Mac needs SSH and a browser, not ROS.
 [The Xbox guide](gamepad.md) adds controller input and live command previews
 to this same menu using `teleop:=browser` or `teleop:=local`. Xbox mode
-disables automatic hold outputs; `teleop:=off` restores the normal controller.
+omits the automatic hold nodes; `teleop:=off` restores them.
 For a simulation running locally, open that same address without a tunnel.
 
 PID gains, position output limit, integral limit, roll feedforward/rate and
@@ -107,7 +112,7 @@ ros2 launch robosub_bringup robot.launch.py mode:=sim tuning:=true \
 
 Without a tuning file, restart returns to code defaults. To hard-lock every
 tunable number, set `LOCK_TUNING_DEFAULTS = True` in
-`robosub_sim/robosub_sim/constants.py`. This overrides launch options, ignores
+`robosub_control/robosub_control/config/constants.py`. This overrides launch options, ignores
 numeric tuning overrides, makes the values read-only and creates no tuning
 subscription. Normal `tuning:=false` also fixes tunable numbers to defaults.
 
@@ -120,7 +125,7 @@ tunable fields. Hardware calibration and thrust limits are not exposed.
 Create one registry per node and register numbers during construction:
 
 ```python
-from robosub_sim.tuning import TunableNumbers
+from robosub_control.utils.tuning import TunableNumbers
 
 self.tuning = TunableNumbers(self)
 self.gain = self.tuning.number("gain", 1.0, minimum=0.0)

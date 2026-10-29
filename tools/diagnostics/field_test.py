@@ -18,7 +18,7 @@ import rclpy
 from rclpy.signals import SignalHandlerOptions
 from rclpy.utilities import remove_ros_args
 
-from robosub_bringup.field_checks import (
+from field_checks import (
     MAX_DELTA_US,
     check_outputs,
     json_finite,
@@ -27,7 +27,7 @@ from robosub_bringup.field_checks import (
     pulse_effort,
     pulse_plan,
 )
-from robosub_bringup.field_monitor import FieldMonitor
+from field_monitor import FieldMonitor
 
 
 class PulseTest:

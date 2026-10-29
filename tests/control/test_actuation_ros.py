@@ -9,6 +9,9 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_control"))
+sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(ROOT / "tools/diagnostics"))
 sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_sim"))
 
 try:
@@ -47,9 +50,9 @@ class ActuationRosTests(unittest.TestCase):
         from geometry_msgs.msg import Twist
         from rclpy.executors import SingleThreadedExecutor
         from rclpy.node import Node
-        from robosub_sim import future_t200 as constants
-        from robosub_sim.actuator_commands import ActuatorCommands
-        from robosub_sim.thruster_mixer import ThrusterMixer
+        from robosub_control.config import future_t200 as constants
+        from robosub_control.thrusters.actuator_commands import ActuatorCommands
+        from robosub_control.thrusters.thruster_mixer import ThrusterMixer
         from std_msgs.msg import Float64, UInt16MultiArray
 
         self.initialization = patch.object(constants, "ESC_NEUTRAL_INIT_S", 0.0)
@@ -141,7 +144,7 @@ class ActuationRosTests(unittest.TestCase):
         self.wait_for(lambda: self.pulses == [1500] * 6)
 
     def test_initialization_policy_holds_neutral(self):
-        from robosub_sim import future_t200 as constants
+        from robosub_control.config import future_t200 as constants
 
         self.target.linear.x = 0.5
         with patch.object(constants, "ESC_NEUTRAL_INIT_S", 60.0):
@@ -156,8 +159,8 @@ class M5ActuationRosTests(unittest.TestCase):
         from geometry_msgs.msg import Twist
         from rclpy.executors import SingleThreadedExecutor
         from rclpy.node import Node
-        from robosub_sim.actuator_commands import ActuatorCommands
-        from robosub_sim.thruster_mixer import ThrusterMixer
+        from robosub_control.thrusters.actuator_commands import ActuatorCommands
+        from robosub_control.thrusters.thruster_mixer import ThrusterMixer
         from std_msgs.msg import Float64MultiArray
 
         os.environ["ROS_DOMAIN_ID"] = "198"

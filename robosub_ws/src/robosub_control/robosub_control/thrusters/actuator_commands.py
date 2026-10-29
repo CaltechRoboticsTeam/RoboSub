@@ -13,10 +13,10 @@ from std_msgs.msg import (
     UInt16MultiArray,
 )
 
-from robosub_sim import constants
-from robosub_sim.thrust_allocation import ThrustAllocator
-from robosub_sim.tuning import fixed_parameter
-from robosub_sim.vehicle_profiles import profile_from_node
+from robosub_control.config import constants
+from robosub_control.thrusters.thrust_allocation import ThrustAllocator
+from robosub_control.utils.tuning import fixed_parameter
+from robosub_control.config.vehicle_profiles import profile_from_node
 
 
 class ActuatorCommands(Node):

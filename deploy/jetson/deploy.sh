@@ -93,7 +93,8 @@ set +u
 source /opt/ros/humble/setup.bash
 set -u
 cd "${field_release}/robosub_ws"
-colcon build --symlink-install --packages-select robosub_sim robosub_bringup
+colcon build --symlink-install --packages-select \
+  robosub_control robosub_sim robosub_bringup
 set +u
 source install/setup.bash
 set -u

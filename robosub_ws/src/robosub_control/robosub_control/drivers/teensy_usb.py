@@ -10,9 +10,9 @@ import struct
 import termios
 import time
 
-from robosub_sim import current_m5
+from robosub_control.config import current_m5
 
-from robosub_bringup.videoray import BusDiagnostics
+from robosub_control.drivers.videoray import BusDiagnostics
 
 DEVICE = "/dev/serial/by-id/usb-Teensyduino_USB_Serial_19620450-if00"
 SLOTS = 8

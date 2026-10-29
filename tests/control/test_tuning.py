@@ -14,10 +14,13 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_control"))
+sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(ROOT / "tools/diagnostics"))
 sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_sim"))
 sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_bringup"))
 
-from robosub_sim.tunable_number import TunableNumber  # noqa: E402
+from robosub_control.utils.tunable_number import TunableNumber  # noqa: E402
 
 try:
     import rclpy
@@ -75,7 +78,7 @@ class RosTuningTests(unittest.TestCase):
         from rclpy.executors import SingleThreadedExecutor
         from rclpy.node import Node
         from robosub_bringup.tuning_menu import ParameterBrowser
-        from robosub_sim.tuning import TunableNumbers
+        from robosub_control.utils.tuning import TunableNumbers
 
         self.node = Node("tuning_test")
         self.registry = TunableNumbers(self.node)
@@ -130,8 +133,8 @@ class RosTuningTests(unittest.TestCase):
     def test_hard_lock_ignores_overrides_and_rejects_updates(self):
         from rclpy.node import Node
         from rclpy.parameter import Parameter
-        from robosub_sim import constants
-        from robosub_sim.tuning import TunableNumbers
+        from robosub_control.config import constants
+        from robosub_control.utils.tuning import TunableNumbers
 
         locked = Node(
             "locked_test",
@@ -157,7 +160,9 @@ class RosTuningTests(unittest.TestCase):
             locked.destroy_node()
 
     def test_real_controller_gain_updates_without_reconstruction(self):
-        from robosub_sim.depth_heading_controller import DepthHeadingController
+        from robosub_control.autonomy.depth_heading_controller import (
+            DepthHeadingController,
+        )
 
         controller = DepthHeadingController()
         self.executor.add_node(controller)
@@ -175,7 +180,9 @@ class RosTuningTests(unittest.TestCase):
 
     def test_default_output_rate_publishes_each_tick_despite_jitter(self):
         from nav_msgs.msg import Odometry
-        from robosub_sim.depth_heading_controller import DepthHeadingController
+        from robosub_control.autonomy.depth_heading_controller import (
+            DepthHeadingController,
+        )
 
         controller = DepthHeadingController()
         try:
@@ -195,7 +202,7 @@ class RosTuningTests(unittest.TestCase):
     def test_tuning_enabled_accepts_startup_numeric_overrides(self):
         from rclpy.node import Node
         from rclpy.parameter import Parameter
-        from robosub_sim.tuning import TunableNumbers
+        from robosub_control.utils.tuning import TunableNumbers
 
         node = Node(
             "override_test",

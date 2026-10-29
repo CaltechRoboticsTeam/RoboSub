@@ -24,7 +24,7 @@ from rclpy.node import Node
 from ros_gz_interfaces.msg import Altimeter
 from std_msgs.msg import Float64
 
-from robosub_sim import constants
+from robosub_control.config import constants
 
 
 class DepthSensor(Node):

@@ -7,6 +7,9 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_control"))
+sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(ROOT / "tools/diagnostics"))
 sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_sim"))
 
 try:
@@ -64,7 +67,7 @@ class LaunchTests(unittest.TestCase):
         include.assert_called_once()
         package, filename, arguments = include.call_args.args
         self.assertEqual(
-            (package, filename), ("robosub_sim", "vehicle.launch.py")
+            (package, filename), ("robosub_control", "vehicle.launch.py")
         )
         self.assertEqual(arguments["use_sim_time"], "false")
 
@@ -157,6 +160,43 @@ class LaunchTests(unittest.TestCase):
         ):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 self.launch.start(self.context(**changes))
+
+    def test_live_manual_launch_omits_unused_control_nodes(self):
+        source = (
+            ROOT / "robosub_ws/src/robosub_control/launch/vehicle.launch.py"
+        )
+        spec = importlib.util.spec_from_file_location("vehicle_launch", source)
+        vehicle = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(vehicle)
+        context = self.context()
+        context.launch_configurations.update(
+            {
+                "manual_control": "true",
+                "preview_commands": "false",
+                "simulate_actuators": "false",
+                "use_sim_time": "false",
+                "tuning_file": "",
+            }
+        )
+        with patch.object(vehicle, "Node") as node:
+            vehicle.start(context)
+        self.assertEqual(
+            [call.kwargs["executable"] for call in node.call_args_list],
+            ["thruster_mixer"],
+        )
+        context.launch_configurations["manual_control"] = "false"
+        context.launch_configurations["preview_commands"] = "true"
+        with patch.object(vehicle, "Node") as node:
+            vehicle.start(context)
+        self.assertEqual(
+            [call.kwargs["executable"] for call in node.call_args_list],
+            [
+                "thruster_mixer",
+                "actuator_commands",
+                "state_estimator",
+                "depth_heading_controller",
+            ],
+        )
 
     def test_hard_lock_overrides_tuning_launch_option(self):
         with (

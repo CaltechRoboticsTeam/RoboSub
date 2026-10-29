@@ -5,8 +5,8 @@ import math
 
 import numpy as np
 
-from robosub_sim.t200 import T200Model
-from robosub_sim.vehicle_profiles import get_profile
+from robosub_control.thrusters.t200 import T200Model
+from robosub_control.config.vehicle_profiles import get_profile
 
 AXES = ("surge", "sway", "heave", "roll", "yaw")
 CONTROLLED_ROWS = (0, 1, 2, 3, 5)

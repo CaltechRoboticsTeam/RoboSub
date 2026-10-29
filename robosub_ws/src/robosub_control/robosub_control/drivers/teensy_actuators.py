@@ -7,12 +7,12 @@ import rclpy
 from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
 from rclpy.signals import SignalHandlerOptions
-from robosub_sim import constants, current_m5
-from robosub_sim.thrust_allocation import ThrustAllocator
-from robosub_sim.tuning import fixed_parameter
+from robosub_control.config import constants, current_m5
+from robosub_control.thrusters.thrust_allocation import ThrustAllocator
+from robosub_control.utils.tuning import fixed_parameter
 from std_msgs.msg import Float64MultiArray, MultiArrayDimension
 
-from robosub_bringup.teensy_usb import (
+from robosub_control.drivers.teensy_usb import (
     DEVICE,
     MAX_DELTA_US,
     NEUTRAL_US,

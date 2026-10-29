@@ -7,7 +7,6 @@ setup(
     name=package_name,
     version='0.1.0',
     packages=[package_name],
-    package_data={package_name: ['data/*.json', 'data/*.md']},
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
@@ -24,13 +23,8 @@ setup(
     license='MIT',
     entry_points={
         'console_scripts': [
-            'thruster_mixer = robosub_sim.thruster_mixer:main',
-            'actuator_commands = robosub_sim.actuator_commands:main',
             'depth_sensor = robosub_sim.depth_sensor:main',
             'dvl_sensor = robosub_sim.dvl_sensor:main',
-            'state_estimator = robosub_sim.state_estimator:main',
-            'depth_heading_controller = robosub_sim.depth_heading_controller:main',
-            'mission = robosub_sim.mission:main',
             'dashboard = robosub_sim.dashboard:main',
         ],
     },

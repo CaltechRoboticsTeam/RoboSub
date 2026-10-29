@@ -3,9 +3,9 @@
 import threading
 import time
 
-from robosub_sim import constants
+from robosub_control.config import constants
 
-from robosub_bringup.gamepad import validate_axes
+from robosub_control.teleop.gamepad import validate_axes
 
 
 class BrowserGamepad:
@@ -27,6 +27,9 @@ class BrowserGamepad:
         session = data.get("session")
         sequence = data.get("sequence")
         held = data.get("held")
+        stop = data.get("stop", False)
+        if type(stop) is not bool:
+            raise ValueError("Invalid stop flag")
         if not isinstance(session, str) or not 1 <= len(session) <= 64:
             raise ValueError("Invalid controller session")
         if type(sequence) is not int or not 0 <= sequence < 2**53:
@@ -34,8 +37,6 @@ class BrowserGamepad:
         if type(held) is not bool:
             raise ValueError("Provide the RB button state")
         axes = validate_axes(data.get("axes", []))
-        if len(data["axes"]) != 4:
-            raise ValueError("Expected exactly four stick axes")
         with self.lock:
             now = time.monotonic()
             expired = now - self.last_rx > constants.GAMEPAD_INPUT_TIMEOUT_S
@@ -51,5 +52,8 @@ class BrowserGamepad:
             self.session = session
             self.sequence = sequence
             self.last_rx = now
-            self.publish(axes, held)
+            if stop:
+                self.publish([], False)
+            else:
+                self.publish(axes, held)
         return {"successful": True}

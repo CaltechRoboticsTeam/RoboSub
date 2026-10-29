@@ -12,9 +12,9 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64, Float64MultiArray, MultiArrayDimension
 
-from robosub_sim import constants
-from robosub_sim.thrust_allocation import AXES, ThrustAllocator
-from robosub_sim.vehicle_profiles import profile_from_node
+from robosub_control.config import constants
+from robosub_control.thrusters.thrust_allocation import AXES, ThrustAllocator
+from robosub_control.config.vehicle_profiles import profile_from_node
 
 
 class ThrusterMixer(Node):

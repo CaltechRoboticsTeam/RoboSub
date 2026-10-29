@@ -1,4 +1,4 @@
-"""Firmware parser, VideoRay CRC, USB transport and relay interlocks."""
+"""Firmware parser, VideoRay CRC and USB transport diagnostics."""
 
 import argparse
 import binascii
@@ -20,12 +20,12 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_bringup"))
-sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_sim"))
+sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_control"))
+sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(ROOT / "tools/diagnostics"))
 
-from robosub_bringup.teensy_test import parse_hold, pulse_values  # noqa: E402
-from robosub_bringup.teensy_usb import (  # noqa: E402
-    NEUTRAL_US,
+from diagnostics.teensy_test import parse_hold, pulse_values  # noqa: E402
+from robosub_control.drivers.teensy_usb import (  # noqa: E402
     TeensyUsb,
     decode_frame,
     depth_sample,
@@ -33,12 +33,7 @@ from robosub_bringup.teensy_usb import (  # noqa: E402
     m5_power_slots,
     validate_pwm,
 )
-from robosub_bringup.videoray import BusDiagnostics  # noqa: E402
-
-try:
-    import rclpy  # noqa: F401
-except ImportError:
-    rclpy = None
+from robosub_control.drivers.videoray import BusDiagnostics  # noqa: E402
 
 
 def command(session, sequence, enabled=False, delta=0, slot=0):
@@ -135,12 +130,13 @@ class FirmwareTests(unittest.TestCase):
         for invalid_id in (-1, 8, True, 0):
             with (
                 patch.dict(
-                    "robosub_sim.current_m5.M5_MOTOR_IDS", LD=invalid_id
+                    "robosub_control.config.current_m5.M5_MOTOR_IDS",
+                    LD=invalid_id,
                 ),
                 self.assertRaises(ValueError),
             ):
                 m5_power_slots(powers)
-        with patch.dict("robosub_sim.current_m5.M5_MOTOR_IDS", LD=7):
+        with patch.dict("robosub_control.config.current_m5.M5_MOTOR_IDS", LD=7):
             self.assertEqual(m5_power_slots([0, 0, 0, 0, 0, 0.5])[7], 1750)
 
     def test_neutral_handshake_and_watchdog_require_explicit_restart(self):
@@ -230,7 +226,7 @@ class UsbTransportTests(unittest.TestCase):
         self.assertEqual(pulse_values(None, 500, 30, 60, 2), [2000] * 8)
 
     def test_forever_hold_ctrl_c_commands_neutral_and_keeps_sample_count(self):
-        from robosub_bringup.teensy_test import main
+        from diagnostics.teensy_test import main
 
         clock = [0.0]
         commands = []
@@ -266,14 +262,12 @@ class UsbTransportTests(unittest.TestCase):
         bridge.close = lambda: command([1500] * 8)
         output = io.StringIO()
         with (
+            patch("diagnostics.teensy_test.TeensyUsb", side_effect=open_bridge),
             patch(
-                "robosub_bringup.teensy_test.TeensyUsb", side_effect=open_bridge
-            ),
-            patch(
-                "robosub_bringup.teensy_test.time.monotonic",
+                "diagnostics.teensy_test.time.monotonic",
                 side_effect=lambda: clock[0],
             ),
-            patch("robosub_bringup.teensy_test.time.sleep", side_effect=sleep),
+            patch("diagnostics.teensy_test.time.sleep", side_effect=sleep),
             redirect_stdout(output),
         ):
             result = main(
@@ -446,7 +440,7 @@ class UsbTransportTests(unittest.TestCase):
         self.transport("capture")
 
     def test_missing_motor_reply_blocks_every_nonneutral_attempt(self):
-        from robosub_bringup.teensy_test import main
+        from diagnostics.teensy_test import main
 
         commands = []
         info = {"protocol_version": 2, "rs485_serial": 1, "max_delta_us": 500}
@@ -460,7 +454,7 @@ class UsbTransportTests(unittest.TestCase):
             close=lambda: None,
         )
         with (
-            patch("robosub_bringup.teensy_test.TeensyUsb", return_value=bridge),
+            patch("diagnostics.teensy_test.TeensyUsb", return_value=bridge),
             redirect_stdout(io.StringIO()),
         ):
             result = main(
@@ -547,7 +541,7 @@ class VideoRayTests(unittest.TestCase):
         bus.feed(status_packet())
         with (
             patch(
-                "robosub_bringup.videoray.time.monotonic",
+                "robosub_control.drivers.videoray.time.monotonic",
                 return_value=bus.status_time + 0.3,
             ),
             self.assertRaisesRegex(RuntimeError, "stale"),
@@ -565,26 +559,3 @@ class VideoRayTests(unittest.TestCase):
         self.assertEqual(bus.dropped_bytes, 48)
         with self.assertRaises(ValueError):
             bus.capture(["R1", "4", "48", "00" * 49])
-
-
-@unittest.skipIf(rclpy is None, "ROS messages are not installed")
-class RelayTests(unittest.TestCase):
-    def test_disarmed_neutral_stale_data_and_output_limit(self):
-        from robosub_bringup.teensy_relay import relay_values
-
-        state = SimpleNamespace(connected=True, armed=False, mode="MANUAL")
-        self.assertEqual(
-            relay_values(state, 0.1, None, 100), ([NEUTRAL_US] * 8, False)
-        )
-        state.armed = True
-        self.assertEqual(
-            relay_values(state, 0.1, [1525] * 8, 0.1), ((1525,) * 8, True)
-        )
-        for state_age, channels, age in (
-            (2, [1500] * 8, 0.1),
-            (0.1, [1500] * 8, 0.3),
-            (0.1, [1550] * 8, 0.1),
-            (0.1, None, 0.1),
-        ):
-            with self.assertRaises(ValueError):
-                relay_values(state, state_age, channels, age)

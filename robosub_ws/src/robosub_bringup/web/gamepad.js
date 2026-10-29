@@ -28,8 +28,8 @@
         ? numbers(data.command) : "waiting / stale";
       const motors = data.preview ? numbers(data.preview) : "waiting / stale";
       preview.textContent = [
-        `RB enabled: ${data.enabled === true ? "yes" : "no"}`,
-        `Body effort [forward, left, up, turn left]: ${command}`,
+        `Movement enabled: ${data.enabled === true ? "yes" : "no"}`,
+        `Body effort [forward, left, up, roll right, turn left]: ${command}`,
         `${data.preview_names.map((name, i) =>
           `${data.preview_ids[i]}:${name}`).join("  ")} ` +
           `(${data.preview_units}; ` +
@@ -77,14 +77,14 @@
     }
   }
 
-  function sendFrame(axes, held, options = {}) {
+  function sendFrame(axes, held, options = {}, stop = false) {
     return request("/api/gamepad", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Tuning-Token": token,
       },
-      body: JSON.stringify({session, sequence: sequence++, axes, held}),
+      body: JSON.stringify({session, sequence: sequence++, axes, held, stop}),
       ...options,
     });
   }
@@ -97,14 +97,14 @@
     if (pending) pending.abort();
     status.textContent = message;
     // A higher sequence stop supersedes an earlier request still in flight.
-    sendFrame([0, 0, 0, 0], false, {keepalive: true}).catch(() => {});
+    sendFrame([0, 0, 0, 0, 0, 0], false, {keepalive: true}, true).catch(() => {});
   }
 
   enable.onclick = () => {
     devices();
     const pad = navigator.getGamepads()[Number(select.value)];
     if (!pad || pad.mapping !== "standard" || pad.axes.length < 4 ||
-        pad.buttons.length < 6) {
+        pad.buttons.length < 8) {
       status.textContent = "Connect an Xbox controller and press a button. " +
         "The browser must report the standard gamepad layout.";
       return;
@@ -114,7 +114,7 @@
     centered = false;
     select.disabled = true;
     enable.disabled = true;
-    status.textContent = "Center sticks and release RB, then hold RB to move.";
+    status.textContent = "Center sticks and release RB, then press RB to toggle movement. RT rolls right; LT rolls left.";
   };
   stop.onclick = () => disable("Controller input disabled.");
   window.addEventListener("blur", () => {
@@ -142,7 +142,8 @@
       disable("Controller or window unavailable; input disabled.");
       return;
     }
-    const axes = pad.axes.slice(0, 4);
+    const axes = [...pad.axes.slice(0, 4),
+      pad.buttons[6].value, pad.buttons[7].value];
     const held = pad.buttons[5].pressed;
     if (!centered) {
       if (held || axes.some(value => Math.abs(value) > settings.deadzone)) return;
@@ -155,7 +156,7 @@
       await sendFrame(axes, held, {signal: pending.signal});
       if (armed) {
         status.textContent = `${pad.id}\nRB: ${held ? "held" : "released"}; ` +
-          `raw sticks: ${axes.map(value => value.toFixed(3)).join("  ")}`;
+          `sticks + LT/RT: ${axes.map(value => value.toFixed(3)).join("  ")}`;
       }
     } catch (error) {
       if (armed) disable(`Input stopped: ${error.message}`);

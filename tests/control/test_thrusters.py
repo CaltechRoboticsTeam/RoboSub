@@ -10,18 +10,21 @@ import xml.etree.ElementTree as ET
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_control"))
+sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(ROOT / "tools/diagnostics"))
 sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_sim"))
 
-from robosub_sim import current_m5  # noqa: E402
-from robosub_sim import future_t200 as constants  # noqa: E402
+from robosub_control.config import current_m5  # noqa: E402
+from robosub_control.config import future_t200 as constants  # noqa: E402
 from robosub_sim.simulation_world import configured_world  # noqa: E402
-from robosub_sim.t200 import T200Model  # noqa: E402
-from robosub_sim.thrust_allocation import (  # noqa: E402
+from robosub_control.thrusters.t200 import T200Model  # noqa: E402
+from robosub_control.thrusters.thrust_allocation import (  # noqa: E402
     AXES,
     CONTROLLED_ROWS,
     ThrustAllocator,
 )
-from robosub_sim.vehicle_profiles import get_profile  # noqa: E402
+from robosub_control.config.vehicle_profiles import get_profile  # noqa: E402
 
 
 class T200Tests(unittest.TestCase):
