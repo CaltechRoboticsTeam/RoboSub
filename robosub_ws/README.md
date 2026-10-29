@@ -1,23 +1,32 @@
-# robosub_ws — AUV simulation environment
+# robosub_ws — Robot workspace
 
 For the separate ZED 2i perception launch and calibration workflow, see
 [underwater vision](../docs/software/vision.md).
+For the master launcher and developer menu, see
+[robot startup and tuning](../docs/software/runtime.md).
+For deployment and current-submarine MAVROS checks, see
+[field testing](../docs/software/field-testing.md).
+For Xbox input from the Mac or Linux, see
+[controller setup](../docs/software/gamepad.md).
+For measured motor/sensor positions and the M5 power / T200 PWM paths, see
+[vehicle profiles and M5/T200 commands](../docs/software/thrusters.md).
 
-ROS 2 **Humble** + Gazebo **Harmonic**, in a container, so simulation code and
-Jetson code are the same code.
+ROS 2 **Humble** + Gazebo **Harmonic**, in a container. The movement stack is
+exercised with simulated sensors. Real manual M5 driving uses the optional
+Teensy USB transport; autonomous hardware integration remains incomplete.
 
 ## Why Docker
 This desktop runs Ubuntu 24.04, whose native ROS 2 is **Jazzy**. The sub's
 Jetson runs **Humble** (JetPack 6 / Ubuntu 22.04). Running Humble in a
-container here means a node that works in sim works on the vehicle — no
-"it worked on my laptop" at competition.
+container here keeps the ROS version consistent. Simulation does not verify
+physical drivers, sensor mounting, calibration or controller tuning.
 
 ## Quick start
 ```bash
 ./run.sh                      # build/enter the container
-colcon build --symlink-install
+colcon build --symlink-install --packages-select robosub_sim robosub_bringup
 source install/setup.bash
-ros2 launch robosub_sim pool.launch.py
+ros2 launch robosub_bringup robot.launch.py mode:=sim
 ```
 
 Drive it (second terminal — `./run.sh` again attaches to the running container):
@@ -45,14 +54,17 @@ rqt_image_view /sub/camera/image_raw
 |---|---|
 | `docker/Dockerfile` | Humble + Harmonic + bridge + tools |
 | `docker/compose.yaml` | GPU, X11, host networking, volume mounts |
+| `src/robosub_bringup/launch/robot.launch.py` | Master entry: sim/real, vision, mission and tuning |
 | `src/robosub_sim/worlds/pool.sdf` | Pool, water, sub, gate |
 | `src/robosub_sim/config/bridge.yaml` | Gazebo topics <-> ROS topics |
 | `src/robosub_sim/robosub_sim/thruster_mixer.py` | Control allocation |
+| `src/robosub_sim/robosub_sim/actuator_commands.py` | M5 power / T200 PWM preview and simulated response |
 | `src/robosub_sim/robosub_sim/depth_sensor.py` | Altimeter -> `/depth` (stand-in for the pressure sensor driver) |
 | `src/robosub_sim/robosub_sim/dvl_sensor.py` | Ground truth -> `/dvl/velocity`, `/dvl/altitude` (stand-in for the Pathfinder DVL driver) |
 | `src/robosub_sim/robosub_sim/state_estimator.py` | `/imu/data_raw` + `/depth` + `/dvl/velocity` -> `/sub/state` (attitude, depth, x/y) |
 | `src/robosub_sim/robosub_sim/depth_heading_controller.py` | PID depth + heading + position hold -> `/sub/cmd_vel` |
-| `src/robosub_sim/launch/vehicle.launch.py` | What runs on the Jetson: drivers -> estimator -> controller -> mixer (no Gazebo) |
+| `src/robosub_sim/launch/vehicle.launch.py` | Shared movement stack and previews |
+| `src/robosub_bringup/robosub_bringup/teensy_actuators.py` | Optional real M5 USB output |
 | `src/robosub_sim/launch/pool.launch.py` | The sim: Gazebo + bridge + sensor stand-ins + `vehicle.launch.py` |
 | `src/robosub_sim/robosub_sim/dashboard.py` | Live terminal view: sensors | estimator | commands | thrust, with rates |
 | `src/robosub_sim/robosub_sim/mission.py` | Scripted missions: `dive`, `heading`, `move`, `goto`, `roll`, `wait`, `surface` |
@@ -61,7 +73,12 @@ rqt_image_view /sub/camera/image_raw
 | ROS topic | Type | Direction |
 |---|---|---|
 | `/sub/cmd_vel` | `geometry_msgs/Twist` | you -> mixer |
-| `/sub/thrust/t{1..6}` | `std_msgs/Float64` | mixer -> sim |
+| `/sub/m5/power_targets` | `std_msgs/Float64MultiArray` | M5 mixer -> command stage, normalized power |
+| `/sub/m5/power_preview` | `std_msgs/Float64MultiArray` | M5 logical motor powers; preview only |
+| `/sub/thruster_forces` | `std_msgs/Float64MultiArray` | T200 mixer -> command stage, N |
+| `/sub/esc/pwm_preview` | `std_msgs/UInt16MultiArray` | T200 channel-ordered pulse widths, us; preview only |
+| `/sub/m5/power_sent` | `std_msgs/Float64MultiArray` | USB-acknowledged M5 motor powers |
+| `/sim/thrust/t{0..5}` | `std_msgs/Float64` | command stage -> Gazebo, applied force in N |
 | `/sub/odom` | `nav_msgs/Odometry` | sim -> you (ground truth, **scoring only** -- never subscribe from control code) |
 | `/imu/data_raw` | `sensor_msgs/Imu` | sim -> you (100 Hz, gravity-included, noisy + biased like a MEMS part) |
 | `/altimeter` | `ros_gz_interfaces/Altimeter` | sim -> depth_sensor (raw, relative to spawn height) |
@@ -101,10 +118,10 @@ ros2 topic pub -1 /sub/setpoint/roll    std_msgs/msg/Float64 '{data: 0.26}'  # r
 ros2 topic echo /sub/state/rpy                                                # watch it
 ```
 
-Roll is held against the sub's own righting moment (~20 N.m at 90 deg). The
-mixer puts full thrust behind roll (~35 N.m), a feedforward term cancels the
-righting torque at every angle, and the integral mops up the rest, so any
-angle holds. A barrel roll cannot be a setpoint (angles wrap), so:
+Roll control combines PID with a feedforward term for righting torque.
+Available roll authority depends on the selected vehicle profile. Gains and
+feedforward need tuning against the actual vehicle. A barrel roll uses a
+separate multi-turn request because ordinary angle setpoints wrap:
 
 ```bash
 ros2 topic pub -1 /sub/setpoint/roll_turns std_msgs/msg/Float64 '{data: 1.0}'   # one 360, then level
@@ -112,8 +129,9 @@ ros2 topic pub -1 /sub/setpoint/roll_turns std_msgs/msg/Float64 '{data: 1.0}'   
 
 During the roll the depth and heading outputs are scaled by cos(roll), so an
 inverted sub still pushes the right way and one on its side does not fight.
-Measured: a 360 takes ~10 s at 0.6 rad/s, peak effort 0.84, depth stays within
-3 cm, pitch/yaw wander < 8 deg while inverted and recover on their own.
+Earlier template simulations recorded a 360 in ~10 s at 0.6 rad/s. Those
+results predate the vehicle profiles and do not validate current M5 or future
+T200 tuning.
 
 Once a setpoint has been sent the controller owns `/sub/cmd_vel`. Drive
 forward/sideways through `/sub/cmd_vel_manual` instead (only `linear.x` and
@@ -173,11 +191,27 @@ is logged every 2 s. Verified in sim: the six-step mission above completes in
 ~40 s and ends within 4 cm of ground truth.
 
 ## Running on the vehicle
-`vehicle.launch.py` is the Jetson launch: it starts the mixer, estimator and
-controller and has commented slots for the four drivers (IMU, pressure, DVL,
-thrusters) with the exact topic contracts each must meet. `pool.launch.py`
-includes it, so the sim always exercises the same nodes the sub runs. The
-drivers are the only code that differs between sim and vehicle.
+The master launcher's `mode:=real` starts the real ZED stack and includes
+`vehicle.launch.py` for the same movement executables used
+by simulation. Real pressure/DVL adapters and the ZED IMU adapter remain
+missing. Without sensor inputs, the estimator waits and automatic hold stays
+idle. Manual joystick control sends body-relative efforts directly, with
+`actuators:=teensy_usb` enabling M5 motor output. Follow the
+[controller setup](../docs/software/gamepad.md) for the launch and HTML page.
+There is no robot startup service yet.
+Use the vision Python environment and interpreter command in the runtime guide.
+
+Movement tuning defaults live in
+`src/robosub_sim/robosub_sim/constants.py`. Current measured mounts and M5
+settings live in `current_m5.py`; saved future T200 settings live in
+`future_t200.py` in the same folder. The master defaults to
+`vehicle:=current_m5`; select `vehicle:=future_t200` for the planning profile.
+ROS parameters can override the
+startup-only defaults at startup. Tunable PID/filter values use code defaults
+unless `tuning:=true`; the developer menu applies changes during execution.
+Controller, mission, DVL and mixer timers call
+their respective `periodic()` methods; `on_*()` methods handle incoming
+messages. Vision settings remain in its existing YAML configuration.
 
 ## Gotchas already handled
 Each of these cost a debugging cycle. They are in the world file as comments too.
@@ -208,7 +242,10 @@ Each of these cost a debugging cycle. They are in the world file as comments too
 - Sub is trimmed **slightly positively buoyant** (39.5 kg displacing 40 kg), so
   a failure floats it instead of sinking it.
 
-## Measured behaviour (verified, software rendering)
+## Earlier simulation measurements
+
+These measurements belong to the earlier world/mixer template. They have not
+been repeated for the vehicle profiles and are not physical M5 measurements.
 | Signal | Rate |
 |---|---|
 | `/imu/data_raw` | 100 Hz (sim time) |

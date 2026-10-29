@@ -2,6 +2,12 @@
 # This file is the seam between "the simulator" and "your robot code".
 # Point your nodes at the ROS side and they will run unchanged on the real sub.
 
+- ros_topic_name: "/clock"
+  gz_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "gz.msgs.Clock"
+  direction: GZ_TO_ROS
+
 - ros_topic_name: "/sub/odom"
   gz_topic_name: "/model/sub/odometry"
   ros_type_name: "nav_msgs/msg/Odometry"
@@ -29,42 +35,41 @@
   gz_type_name: "gz.msgs.Image"
   direction: GZ_TO_ROS
 
-# Thrusters 1-4: vectored horizontals at the hull corners, +-45 deg.
-# Thrusters 5-6: verticals amidships, port and starboard.
-# Numbering matches my_robot_description/robot.urdf and the hardware.
+# IDs 0=FR, 1=FL, 2=BR, 3=BL, 4=RD, 5=LD.
+# Topic IDs follow THRUSTER_TOPIC_IDS; actuator_commands applies the profile.
 
-- ros_topic_name: "/sub/thrust/t1"
+- ros_topic_name: "/sim/thrust/t0"
+  gz_topic_name: "/model/sub/joint/thr_0_joint/cmd_thrust"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/sim/thrust/t1"
   gz_topic_name: "/model/sub/joint/thr_1_joint/cmd_thrust"
   ros_type_name: "std_msgs/msg/Float64"
   gz_type_name: "gz.msgs.Double"
   direction: ROS_TO_GZ
 
-- ros_topic_name: "/sub/thrust/t2"
+- ros_topic_name: "/sim/thrust/t2"
   gz_topic_name: "/model/sub/joint/thr_2_joint/cmd_thrust"
   ros_type_name: "std_msgs/msg/Float64"
   gz_type_name: "gz.msgs.Double"
   direction: ROS_TO_GZ
 
-- ros_topic_name: "/sub/thrust/t3"
+- ros_topic_name: "/sim/thrust/t3"
   gz_topic_name: "/model/sub/joint/thr_3_joint/cmd_thrust"
   ros_type_name: "std_msgs/msg/Float64"
   gz_type_name: "gz.msgs.Double"
   direction: ROS_TO_GZ
 
-- ros_topic_name: "/sub/thrust/t4"
+- ros_topic_name: "/sim/thrust/t4"
   gz_topic_name: "/model/sub/joint/thr_4_joint/cmd_thrust"
   ros_type_name: "std_msgs/msg/Float64"
   gz_type_name: "gz.msgs.Double"
   direction: ROS_TO_GZ
 
-- ros_topic_name: "/sub/thrust/t5"
+- ros_topic_name: "/sim/thrust/t5"
   gz_topic_name: "/model/sub/joint/thr_5_joint/cmd_thrust"
-  ros_type_name: "std_msgs/msg/Float64"
-  gz_type_name: "gz.msgs.Double"
-  direction: ROS_TO_GZ
-
-- ros_topic_name: "/sub/thrust/t6"
-  gz_topic_name: "/model/sub/joint/thr_6_joint/cmd_thrust"
   ros_type_name: "std_msgs/msg/Float64"
   gz_type_name: "gz.msgs.Double"
   direction: ROS_TO_GZ

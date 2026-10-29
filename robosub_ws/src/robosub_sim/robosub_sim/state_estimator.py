@@ -65,7 +65,7 @@ the current attitude, integrate. Drift is ~0.2-1 % of distance travelled
 plus whatever yaw error you have, which is why yaw matters so much.
 
 Parameters
-    dvl_offset     DVL position in body frame, m          (default [-0.15, 0, -0.12])
+    dvl_offset     DVL position in body frame, m          (from vehicle profile)
     dvl_timeout    s without a DVL ping -> velocity = 0   (default 1.0)
     kp             accelerometer correction gain          (default 2.0)
     ki             gyro bias learning gain                (default 0.02)
@@ -74,12 +74,16 @@ Parameters
 """
 import math
 
+from geometry_msgs.msg import TwistWithCovarianceStamped, Vector3Stamped
+from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float64
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Vector3Stamped, TwistWithCovarianceStamped
+
+from robosub_sim import constants
+from robosub_sim.tuning import TunableNumbers, fixed_parameter
+from robosub_sim.vehicle_profiles import profile_from_node
 
 G = 9.81
 
@@ -134,19 +138,20 @@ def stamp_to_sec(stamp):
 class StateEstimator(Node):
     def __init__(self):
         super().__init__('state_estimator')
-        self.declare_parameter('kp', 2.0)
-        self.declare_parameter('ki', 0.02)
-        self.declare_parameter('depth_tau', 0.08)
-        self.declare_parameter('heave_tau', 0.25)
-        self.declare_parameter('dvl_offset', [-0.15, 0.0, -0.12])
-        self.declare_parameter('dvl_timeout', 1.0)
-        p = self.get_parameter
-        self.r_dvl = [float(v) for v in p('dvl_offset').value]
-        self.dvl_timeout = float(p('dvl_timeout').value)
-        self.kp = float(p('kp').value)
-        self.ki = float(p('ki').value)
-        self.depth_tau = float(p('depth_tau').value)
-        self.heave_tau = float(p('heave_tau').value)
+        profile = profile_from_node(self)
+        self.r_dvl = [float(value) for value in fixed_parameter(
+            self, 'dvl_offset', list(profile.DVL_POSITION_BODY_M))]
+        self.dvl_timeout = float(fixed_parameter(
+            self, 'dvl_timeout', constants.ESTIMATOR_DEFAULTS['dvl_timeout']))
+        self.tuning = TunableNumbers(self)
+        for name in ('kp', 'ki', 'depth_tau', 'heave_tau'):
+            number = self.tuning.number(
+                name, constants.ESTIMATOR_DEFAULTS[name],
+                minimum=1e-6 if name.endswith('_tau') else 0.0,
+                description=name.replace('_', ' '),
+            )
+            setattr(self, name, number.get())
+            number.bind_to(self, name)
 
         # Attitude state.
         self.q = (1.0, 0.0, 0.0, 0.0)

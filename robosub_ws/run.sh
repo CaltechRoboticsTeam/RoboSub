@@ -16,4 +16,12 @@ if [ "$(docker ps -q -f name=^robosub$)" ]; then
   exec docker exec -it robosub bash
 fi
 
-docker compose run --rm --name robosub robosub bash
+compose_files=(-f compose.yaml)
+if [[ "${ROBOSUB_GAMEPAD:-0}" == "1" ]]; then
+  if [[ ! -d /dev/input ]]; then
+    echo "Local controller input requires a Linux host with /dev/input." >&2
+    exit 1
+  fi
+  compose_files+=(-f compose.gamepad.yaml)
+fi
+docker compose "${compose_files[@]}" run --rm --name robosub robosub bash

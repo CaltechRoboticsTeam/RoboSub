@@ -1,6 +1,4 @@
 <?xml version="1.0" ?>
-<!-- A minimal RoboSub-style pool. Everything an AUV sim needs and nothing else:
-     water (buoyancy), drag (hydrodynamics), and thrusters you can command. -->
 <sdf version="1.9">
   <world name="pool">
 
@@ -17,7 +15,7 @@
     </plugin>
     <!-- The Sensors system only drives RENDERING sensors (camera, lidar).
          Non-rendering sensors each need their own system plugin or they
-         stay silent -- an IMU declared on the model publishes nothing
+         stay silent. An IMU declared on the model publishes nothing
          without this line. -->
     <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
     <!-- Same rule for the altimeter (our stand-in for the pressure/depth
@@ -94,7 +92,7 @@
              the Onshape assembly origin is ~2 m from the link origin and
              flipped 180 deg about X and Z. The whole URDF frame is also yawed
              180 deg relative to this sim (its x points aft, its y starboard,
-             z up), which collapses the total to a 180 deg roll. Purely cosmetic -- collision
+             z up), which collapses the total to a 180 deg roll. Collision
              stays a box, which is faster and far more numerically stable
              than mesh-mesh contact. -->
         <visual name="hull_mesh">
@@ -112,7 +110,7 @@
              links as propellers, and a body mesh offset from the spin axis
              orbits it (thrusters "flying in circles"). Poses are link_pose *
              mesh_pose from the URDF, precomposed. Cosmetic only. -->
-        <visual name="thr_1_body">
+        <visual name="thr_3_body">
           <pose>-0.32818 0.33802 0.13183 -1.57080 -0.00000 -2.35619</pose>
           <geometry><mesh><uri>file:///ws/src/robosub_sim/meshes/thruster_lowpoly.stl</uri></mesh></geometry>
           <material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.25 0.25 0.25 1</diffuse></material>
@@ -122,12 +120,12 @@
           <geometry><mesh><uri>file:///ws/src/robosub_sim/meshes/thruster_lowpoly.stl</uri></mesh></geometry>
           <material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.25 0.25 0.25 1</diffuse></material>
         </visual>
-        <visual name="thr_3_body">
+        <visual name="thr_1_body">
           <pose>0.32786 0.33802 -0.06517 1.57080 -0.00000 -0.78540</pose>
           <geometry><mesh><uri>file:///ws/src/robosub_sim/meshes/thruster_lowpoly.stl</uri></mesh></geometry>
           <material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.25 0.25 0.25 1</diffuse></material>
         </visual>
-        <visual name="thr_4_body">
+        <visual name="thr_0_body">
           <pose>0.32786 -0.32390 0.13183 -1.57080 -0.00000 0.78540</pose>
           <geometry><mesh><uri>file:///ws/src/robosub_sim/meshes/thruster_lowpoly.stl</uri></mesh></geometry>
           <material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.25 0.25 0.25 1</diffuse></material>
@@ -137,7 +135,7 @@
           <geometry><mesh><uri>file:///ws/src/robosub_sim/meshes/thruster_lowpoly.stl</uri></mesh></geometry>
           <material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.25 0.25 0.25 1</diffuse></material>
         </visual>
-        <visual name="thr_6_body">
+        <visual name="thr_4_body">
           <pose>0.11062 -0.34732 0.08004 -1.57079 1.57079 0.00000</pose>
           <geometry><mesh><uri>file:///ws/src/robosub_sim/meshes/thruster_lowpoly.stl</uri></mesh></geometry>
           <material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.25 0.25 0.25 1</diffuse></material>
@@ -199,19 +197,14 @@
         </sensor>
       </link>
 
-      <!-- ===== Thrusters =====
-           Each is a spinning propeller link on a revolute joint. The Thruster
-           plugin turns a commanded value into force via a propeller model.
-           Two horizontal (surge + yaw), two vertical (heave + pitch). -->
-
       <!-- ===== Thrusters (6, vectored X + 2 vertical) =====
-           Numbering matches the hardware: 1/2 rear corners, 3/4 front
-           corners, 5/6 vertical. Pose rpy aims the local Z axis, which is
+           Operator numbering: 0=FR, 1=FL, 2=BR, 3=BL, 4=RD, 5=LD.
+           Each propeller spins on a revolute joint. Pose rpy aims local Z,
            the thrust line. Positions are the propeller DUCT axes measured
            from the CAD mesh (the URDF joint origins are the mount brackets,
            5-8 cm inboard of the props, so they are NOT used here). The
            Thruster plugin applies force at this link's origin. -->
-      <link name="thr_1">
+      <link name="thr_3">
         <pose>-0.294 0.279 0.033 0 1.5708 -2.35619</pose>
         <inertial><mass>0.05</mass>
           <inertia><ixx>1e-4</ixx><iyy>1e-4</iyy><izz>1e-4</izz>
@@ -230,8 +223,8 @@
           <material><ambient>0.8 0.8 0.2 1</ambient><diffuse>0.9 0.9 0.3 1</diffuse></material>
         </visual>
       </link>
-      <joint name="thr_1_joint" type="revolute">
-        <parent>base_link</parent><child>thr_1</child>
+      <joint name="thr_3_joint" type="revolute">
+        <parent>base_link</parent><child>thr_3</child>
         <axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis>
       </joint>
 
@@ -259,7 +252,7 @@
         <axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis>
       </joint>
 
-      <link name="thr_3">
+      <link name="thr_1">
         <pose>0.294 0.279 0.033 0 1.5708 -0.785398</pose>
         <inertial><mass>0.05</mass>
           <inertia><ixx>1e-4</ixx><iyy>1e-4</iyy><izz>1e-4</izz>
@@ -278,12 +271,12 @@
           <material><ambient>0.8 0.8 0.2 1</ambient><diffuse>0.9 0.9 0.3 1</diffuse></material>
         </visual>
       </link>
-      <joint name="thr_3_joint" type="revolute">
-        <parent>base_link</parent><child>thr_3</child>
+      <joint name="thr_1_joint" type="revolute">
+        <parent>base_link</parent><child>thr_1</child>
         <axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis>
       </joint>
 
-      <link name="thr_4">
+      <link name="thr_0">
         <pose>0.294 -0.279 0.033 0 1.5708 0.785398</pose>
         <inertial><mass>0.05</mass>
           <inertia><ixx>1e-4</ixx><iyy>1e-4</iyy><izz>1e-4</izz>
@@ -302,8 +295,8 @@
           <material><ambient>0.8 0.8 0.2 1</ambient><diffuse>0.9 0.9 0.3 1</diffuse></material>
         </visual>
       </link>
-      <joint name="thr_4_joint" type="revolute">
-        <parent>base_link</parent><child>thr_4</child>
+      <joint name="thr_0_joint" type="revolute">
+        <parent>base_link</parent><child>thr_0</child>
         <axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis>
       </joint>
 
@@ -331,7 +324,7 @@
         <axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis>
       </joint>
 
-      <link name="thr_6">
+      <link name="thr_4">
         <pose>0.012 -0.294 0.067 0 0 0</pose>
         <inertial><mass>0.05</mass>
           <inertia><ixx>1e-4</ixx><iyy>1e-4</iyy><izz>1e-4</izz>
@@ -350,15 +343,15 @@
           <material><ambient>0.8 0.8 0.2 1</ambient><diffuse>0.9 0.9 0.3 1</diffuse></material>
         </visual>
       </link>
-      <joint name="thr_6_joint" type="revolute">
-        <parent>base_link</parent><child>thr_6</child>
+      <joint name="thr_4_joint" type="revolute">
+        <parent>base_link</parent><child>thr_4</child>
         <axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis>
       </joint>
       <!-- HYDRODYNAMICS: added mass + drag (Fossen's equations). Without this
            the sub coasts forever like it's in space.
            NOTE: no quadratic ANGULAR terms (kPP/mQQ/nRR). Gazebo integrates
            hydrodynamics explicitly, and once the hull picks up angular rate
-           those terms diverge -- the sim dies with
+           those terms diverge and the sim dies with
            "ODE INTERNAL ERROR 1: assertion aabbBound >= dMinIntExact".
            Strong LINEAR angular damping keeps rotation bounded instead. -->
       <plugin filename="gz-sim-hydrodynamics-system" name="gz::sim::systems::Hydrodynamics">
@@ -376,7 +369,7 @@
       <!-- One Thruster plugin per propeller. Command topic is
            /model/sub/joint/<joint>/cmd_thrust  (std_msgs/Float64, newtons). -->
       <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
-        <namespace>sub</namespace><joint_name>thr_1_joint</joint_name>
+        <namespace>sub</namespace><joint_name>thr_3_joint</joint_name>
         <thrust_coefficient>0.004422</thrust_coefficient>
         <fluid_density>1000</fluid_density>
         <propeller_diameter>0.2</propeller_diameter>
@@ -390,14 +383,14 @@
         <velocity_control>true</velocity_control>
       </plugin>
       <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
-        <namespace>sub</namespace><joint_name>thr_3_joint</joint_name>
+        <namespace>sub</namespace><joint_name>thr_1_joint</joint_name>
         <thrust_coefficient>0.004422</thrust_coefficient>
         <fluid_density>1000</fluid_density>
         <propeller_diameter>0.2</propeller_diameter>
         <velocity_control>true</velocity_control>
       </plugin>
       <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
-        <namespace>sub</namespace><joint_name>thr_4_joint</joint_name>
+        <namespace>sub</namespace><joint_name>thr_0_joint</joint_name>
         <thrust_coefficient>0.004422</thrust_coefficient>
         <fluid_density>1000</fluid_density>
         <propeller_diameter>0.2</propeller_diameter>
@@ -411,7 +404,7 @@
         <velocity_control>true</velocity_control>
       </plugin>
       <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
-        <namespace>sub</namespace><joint_name>thr_6_joint</joint_name>
+        <namespace>sub</namespace><joint_name>thr_4_joint</joint_name>
         <thrust_coefficient>0.004422</thrust_coefficient>
         <fluid_density>1000</fluid_density>
         <propeller_diameter>0.2</propeller_diameter>

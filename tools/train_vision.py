@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train/validate YOLO or export the trained detector on its target Jetson."""
+"""Train/validate YOLOv11 or export the trained detector on its target Jetson."""
 
 import argparse
 from pathlib import Path

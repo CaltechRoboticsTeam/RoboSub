@@ -39,6 +39,7 @@ def fit_rectification(raw_pixels, rect_pixels, k_raw, d_raw, k_rect, size):
         np.c_[rect_pixels, np.ones(len(rect_pixels))] @ np.linalg.inv(k_rect).T
     )
     # Hold out every third corner; it is never used to fit the rotation.
+    # we don't use it because the SDK's rectification is not perfect, so we use our own analysis to check it.
     train = np.arange(len(raw_pixels)) % 3 != 0
     r = Rotation.align_vectors(rect_dirs[train], raw_dirs[train])[0].as_matrix()
     projected = (raw_dirs @ r.T) @ k_rect.T

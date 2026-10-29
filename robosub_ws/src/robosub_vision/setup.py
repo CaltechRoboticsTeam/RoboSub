@@ -20,7 +20,7 @@ setup(
     ],
     install_requires=["setuptools", "numpy", "scipy", "PyYAML"],
     maintainer="Caltech Robotics Team",
-    maintainer_email="robotics@caltech.edu",
+    maintainer_email="crt@caltech.edu",
     description="Configurable stereo underwater object geometry.",
     license="MIT",
     entry_points={

@@ -1,52 +1,110 @@
-"""Everything that runs on the VEHICLE: drivers -> estimator -> controller -> mixer.
+"""Shared movement programs and profile-specific command previews.
 
-    ros2 launch robosub_sim vehicle.launch.py
-
-pool.launch.py includes this file and adds Gazebo plus the sensor stand-ins,
-so the sim exercises exactly the nodes the Jetson runs. Nothing in here may
-depend on Gazebo.
-
-DRIVERS. Each one replaces a sim stand-in and must speak the same topic:
-
-    IMU driver        -> /imu/data_raw   sensor_msgs/Imu   body frame x fwd,
-                                          y port, z up; rad/s; m/s^2 with
-                                          gravity INCLUDED (+9.81 on z at rest)
-    pressure driver   -> /depth          std_msgs/Float64  metres, +down
-    Pathfinder DVL    -> /dvl/velocity   geometry_msgs/TwistWithCovarianceStamped
-                                          body-frame m/s; publish NOTHING
-                                          without bottom lock
-                      -> /dvl/altitude   std_msgs/Float64  metres above floor
-    thruster driver   <- /sub/thrust/t1..t6  std_msgs/Float64  newtons; must
-                                          zero all outputs if commands stop
-
-Add them as Node(...) entries in `drivers` below once written. Until then
-this launch runs headless: the estimator waits for sensors and the
-controller stays idle.
+The same estimator, controller and mixer execute in simulation and real mode.
+Sensor drivers must supply body-frame /imu/data_raw, /depth and /dvl/velocity.
+actuator_commands previews M5 power or T200 PWM. The master launcher can add the M5 USB output
+transport for real manual control. Sensor adapters remain separate.
 """
+
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+from robosub_sim import constants
+
+
+def start(context):
+    profile = {"vehicle_profile": LaunchConfiguration("vehicle")}
+    shared = {
+        **profile,
+        "use_sim_time": ParameterValue(
+            LaunchConfiguration("use_sim_time"), value_type=bool
+        ),
+        "tuning_enabled": ParameterValue(
+            LaunchConfiguration("tuning"), value_type=bool
+        ),
+    }
+    filename = LaunchConfiguration("tuning_file").perform(context)
+    files = [filename] if filename else []
+    return [
+        Node(
+            package="robosub_sim",
+            executable="thruster_mixer",
+            output="screen",
+            parameters=[{**profile, "use_sim_time": shared["use_sim_time"]}],
+        ),
+        Node(
+            package="robosub_sim",
+            executable="actuator_commands",
+            output="screen",
+            parameters=[
+                {
+                    **profile,
+                    "use_sim_time": shared["use_sim_time"],
+                    "simulation": ParameterValue(
+                        LaunchConfiguration("simulate_actuators"),
+                        value_type=bool,
+                    ),
+                    "rate": ParameterValue(
+                        LaunchConfiguration("control_rate"), value_type=float
+                    ),
+                    "output_rate": ParameterValue(
+                        LaunchConfiguration("output_rate"), value_type=float
+                    ),
+                }
+            ],
+        ),
+        Node(
+            package="robosub_sim",
+            executable="state_estimator",
+            output="screen",
+            parameters=[*files, shared],
+        ),
+        Node(
+            package="robosub_sim",
+            executable="depth_heading_controller",
+            output="screen",
+            parameters=[
+                *files,
+                shared,
+                {
+                    "manual_control": ParameterValue(
+                        LaunchConfiguration("manual_control"), value_type=bool
+                    ),
+                    "rate": ParameterValue(
+                        LaunchConfiguration("control_rate"), value_type=float
+                    ),
+                    "output_rate": ParameterValue(
+                        LaunchConfiguration("output_rate"), value_type=float
+                    ),
+                },
+            ],
+        ),
+    ]
 
 
 def generate_launch_description():
-    drivers = [
-        # Node(package='robosub_drivers', executable='imu_driver', output='screen'),
-        # Node(package='robosub_drivers', executable='pressure_driver', output='screen'),
-        # Node(package='robosub_drivers', executable='pathfinder_dvl', output='screen'),
-        # Node(package='robosub_drivers', executable='thruster_driver', output='screen'),
-    ]
-
-    # /sub/cmd_vel -> six thruster forces. Only this node knows the layout.
-    mixer = Node(package='robosub_sim', executable='thruster_mixer', output='screen')
-
-    # /imu/data_raw + /depth + /dvl/velocity -> /sub/state.
-    # dvl_offset: DVL position relative to the IMU / centre of rotation, in
-    # the body frame. Measure it on the real sub and set it here.
-    estimator = Node(
-        package='robosub_sim', executable='state_estimator', output='screen',
-        parameters=[{'dvl_offset': [-0.15, 0.0, -0.12]}],
+    return LaunchDescription(
+        [
+            DeclareLaunchArgument(
+                "vehicle",
+                default_value=constants.DEFAULT_VEHICLE_PROFILE,
+                choices=["current_m5", "future_t200"],
+            ),
+            DeclareLaunchArgument("manual_control", default_value="false"),
+            DeclareLaunchArgument("use_sim_time", default_value="false"),
+            DeclareLaunchArgument("simulate_actuators", default_value="false"),
+            DeclareLaunchArgument("tuning", default_value="false"),
+            DeclareLaunchArgument("tuning_file", default_value=""),
+            DeclareLaunchArgument(
+                "control_rate",
+                default_value=str(constants.CONTROLLER_DEFAULTS["rate"]),
+            ),
+            DeclareLaunchArgument(
+                "output_rate",
+                default_value=str(constants.CONTROLLER_DEFAULTS["output_rate"]),
+            ),
+            OpaqueFunction(function=start),
+        ]
     )
-
-    # Depth / heading / roll / position hold. Idle until a setpoint arrives.
-    controller = Node(package='robosub_sim', executable='depth_heading_controller', output='screen')
-
-    return LaunchDescription(drivers + [mixer, estimator, controller])

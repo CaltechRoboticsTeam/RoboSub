@@ -9,19 +9,24 @@ estimator makes of them, then what the controller is commanding and what
 each thruster is being told. Drive the sub from another terminal and watch
 the numbers move. Subscribes only; changes nothing.
 """
+from collections import deque
 import math
 import sys
 import time
-from collections import deque
 
+from geometry_msgs.msg import (
+    Point,
+    Twist,
+    TwistWithCovarianceStamped,
+    Vector3Stamped,
+)
+from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float64
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Twist, TwistWithCovarianceStamped, Point, Vector3Stamped
 
-from robosub_sim.state_estimator import q_to_rpy
+from robosub_sim.vehicle_profiles import profile_from_node
 
 W = 40   # column width
 
@@ -46,9 +51,10 @@ class Rate:
 class Dashboard(Node):
     def __init__(self):
         super().__init__('dashboard')
+        self.profile = profile_from_node(self)
         self.imu = None; self.depth = None; self.dvl = None; self.alt = None
         self.state = None; self.rpy = None; self.cmd = None
-        self.thrust = {f't{i}': None for i in range(1, 7)}
+        self.thrust = {topic: None for topic in self.profile.THRUSTERS}
         self.sp = {'depth': None, 'heading': None, 'roll': None, 'position': None}
         self.rates = {k: Rate() for k in ('imu', 'depth', 'dvl', 'state', 'cmd')}
 
@@ -67,8 +73,9 @@ class Dashboard(Node):
         sub(Vector3Stamped, '/sub/state/rpy', 'rpy')
         sub(Twist, '/sub/cmd_vel', 'cmd', 'cmd')
         for k in self.thrust:
-            self.create_subscription(Float64, f'/sub/thrust/{k}',
-                                     lambda m, k=k: self.thrust.__setitem__(k, m.data), 10)
+            self.create_subscription(
+                Float64, f'{self.profile.INDIVIDUAL_TOPIC_PREFIX}/{k}',
+                lambda m, k=k: self.thrust.__setitem__(k, m.data), 10)
         for k in ('depth', 'heading', 'roll'):
             self.create_subscription(Float64, f'/sub/setpoint/{k}',
                                      lambda m, k=k: self.sp.__setitem__(k, m.data), 10)
@@ -140,9 +147,16 @@ class Dashboard(Node):
             R += ['  (idle)', '']
         R.append('')
         t = self.thrust
-        fmt = lambda k: '   -  ' if t[k] is None else f'{t[k]:+6.1f}'
-        R.append('THRUST N   t1     t2     t3     t4     t5     t6')
-        R.append('        ' + ' '.join(fmt(k) for k in ('t1', 't2', 't3', 't4', 't5', 't6')))
+        fmt = lambda k: '   -  ' if t[k] is None else f'{t[k]:+6.2f}'
+        unit = 'POWER' if self.profile.ACTUATOR_KIND == 'm5' else 'THRUST N'
+        labels = ' '.join(
+            f'{index}:{name:2}'
+            for index, name in enumerate(self.profile.THRUSTER_NAMES)
+        )
+        R.append(f'{unit}  {labels}')
+        R.append('        ' + ' '.join(
+            fmt(topic) for topic in self.profile.THRUSTERS
+        ))
         return R
 
     def draw(self):

@@ -1,4 +1,4 @@
-"""Bounded ROI reconstruction and foreground selection."""
+"""Bounded ROI reconstruction and foreground selection. THIS IS FROM A PAPER!"""
 
 import numpy as np
 

@@ -5,8 +5,8 @@
     ros2 run robosub_sim mission --ros-args -p "mission:=['dive 1.5','move 3','goto 0 0','surface']"
 
 Everything happens by publishing setpoints to the controller and watching
-/sub/state until the sub is there. The mission never touches thrusters and
-never reads sensors: if it works in sim it works on the vehicle.
+/sub/state until the sub is there. The mission does not access hardware
+directly; physical operation still needs verified drivers and configuration.
 
 STEPS (one string each, metres / degrees / seconds)
     dive D          go to depth D (+down), hold it from now on
@@ -35,27 +35,23 @@ Parameters
     step_timeout    s                      (60.0)
 """
 import math
-import time
 
+from geometry_msgs.msg import Point
+from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
-from nav_msgs.msg import Odometry
 from std_msgs.msg import Float64
-from geometry_msgs.msg import Point
 
-from robosub_sim.state_estimator import q_to_rpy
+from robosub_sim import constants
 from robosub_sim.depth_heading_controller import wrap_pi
-
-ROLL_SPIN_RATE = 0.6   # rad/s, must match the controller's roll_spin_rate
+from robosub_sim.state_estimator import q_to_rpy
 
 
 class Mission(Node):
     def __init__(self):
         super().__init__('mission')
-        d = self.declare_parameter
-        d('mission', ['dive 1.5', 'move 3.0', 'goto 0 0'])
-        d('pos_tol', 0.20); d('depth_tol', 0.10); d('heading_tol', 5.0)
-        d('settle', 1.0); d('step_timeout', 60.0)
+        for name, default in constants.MISSION_DEFAULTS.items():
+            self.declare_parameter(name, default)
         g = lambda n: self.get_parameter(n).value
         self.steps = [str(s) for s in g('mission')]
         self.pos_tol, self.depth_tol = float(g('pos_tol')), float(g('depth_tol'))
@@ -77,7 +73,7 @@ class Mission(Node):
         self.t_inside = None
         self.t_log = 0.0
         self.finished = False
-        self.create_timer(0.2, self.tick)
+        self.create_timer(constants.MISSION_PERIOD_S, self.periodic)
         self.get_logger().info(f'mission: {self.steps}')
 
     # ------------------------------------------------------------ helpers
@@ -92,7 +88,7 @@ class Mission(Node):
                 -s.pose.pose.position.z, yaw)
 
     def now(self):
-        return time.time()
+        return self.get_clock().now().nanoseconds * 1e-9
 
     # ------------------------------------------------------------ steps
     def start_step(self):
@@ -132,7 +128,10 @@ class Mission(Node):
         elif cmd == 'roll':
             turns = args[0]
             self.pub_roll_turns.publish(Float64(data=turns))
-            t_done = self.now() + abs(turns) * 2*math.pi / ROLL_SPIN_RATE + 3.0
+            t_done = (
+                self.now() + abs(turns) * 2*math.pi
+                / constants.ROLL_SPIN_RATE_RAD_S + 3.0
+            )
             self.check = lambda: self.now() > t_done and abs(self.roll()) < math.radians(10)
         elif cmd == 'wait':
             t_done = self.now() + args[0]
@@ -153,7 +152,8 @@ class Mission(Node):
         q = self.state.pose.pose.orientation
         return q_to_rpy((q.w, q.x, q.y, q.z))[0]
 
-    def tick(self):
+    def periodic(self):
+        """Check mission progress on each mission timer tick."""
         if self.finished or self.state is None:
             return
         if self.state.pose.covariance[0] < 0.0:

@@ -15,7 +15,7 @@ DEFAULTS = {
         "serial_number": 0,
         "resolution": "HD720",
         "fps": 30,
-        "publish_fps": 15.0,
+        "publish_fps": 10.0,
         "depth_mode": "NEURAL_LIGHT",
         "slam": True,
         "tracking_mode": "GEN_3",

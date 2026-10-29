@@ -1,0 +1,8 @@
+# Optional Linux SDL input access. Start Docker with this override only when
+# the controller is plugged into the Linux host; browser input needs no mount.
+services:
+  robosub:
+    volumes:
+      - /dev/input:/dev/input:ro
+    device_cgroup_rules:
+      - 'c 13:* r'

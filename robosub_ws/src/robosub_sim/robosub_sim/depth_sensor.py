@@ -24,11 +24,13 @@ from rclpy.node import Node
 from ros_gz_interfaces.msg import Altimeter
 from std_msgs.msg import Float64
 
+from robosub_sim import constants
+
 
 class DepthSensor(Node):
     def __init__(self):
         super().__init__('depth_sensor')
-        self.declare_parameter('surface_z', 0.0)
+        self.declare_parameter('surface_z', constants.SIM_SURFACE_Z_M)
         self.surface_z = float(self.get_parameter('surface_z').value)
 
         self.pub = self.create_publisher(Float64, '/depth', 10)

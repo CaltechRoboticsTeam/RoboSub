@@ -19,7 +19,7 @@ publish the same two topics; nothing above changes.
 
     /dvl/velocity   geometry_msgs/TwistWithCovarianceStamped
                     linear = velocity over ground in the DVL frame (m/s),
-                    DVL frame == body frame (x fwd, y port, z up) here;
+                    published velocity frame == body frame (x fwd, y port, z up) here;
                     mounting yaw belongs in the real driver's config
     /dvl/altitude   std_msgs/Float64   metres above the floor (only when valid)
 
@@ -27,30 +27,32 @@ Parameters
     rate            ping rate, Hz                          (7.0)
     noise_std       per-ping velocity noise, m/s           (0.004)
     scale_error     fractional scale error                 (0.002)
-    dvl_offset      DVL position in body frame, m          ([-0.15, 0.0, -0.12])
+    dvl_offset      DVL position in body frame, m          ([-0.153, 0.007, -0.016])
     floor_z         world z of the pool floor              (-9.5, from pool.sdf)
     min_altitude    below this: no bottom lock             (0.2)
     max_altitude    above this: no bottom lock             (80.0)
     dropout_prob    chance a ping is lost                  (0.01)
 """
-import math
 import random
 
+from geometry_msgs.msg import TwistWithCovarianceStamped
+from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import TwistWithCovarianceStamped
 from std_msgs.msg import Float64
+
+from robosub_sim import constants
+from robosub_sim.vehicle_profiles import profile_from_node
 
 
 class DvlSensor(Node):
     def __init__(self):
         super().__init__('dvl_sensor')
-        d = self.declare_parameter
-        d('rate', 7.0); d('noise_std', 0.004); d('scale_error', 0.002)
-        d('dvl_offset', [-0.15, 0.0, -0.12])
-        d('floor_z', -9.5); d('min_altitude', 0.2); d('max_altitude', 80.0)
-        d('dropout_prob', 0.01); d('frame_id', 'dvl_link')
+        profile = profile_from_node(self)
+        for name, default in constants.DVL_DEFAULTS.items():
+            if name == "dvl_offset":
+                default = list(profile.DVL_POSITION_BODY_M)
+            self.declare_parameter(name, default)
         g = lambda n: self.get_parameter(n).value
         self.noise = float(g('noise_std')); self.scale = 1.0 + float(g('scale_error'))
         self.r = [float(v) for v in g('dvl_offset')]
@@ -62,7 +64,7 @@ class DvlSensor(Node):
         self.create_subscription(Odometry, '/sub/odom', self.on_odom, 10)
         self.pub_vel = self.create_publisher(TwistWithCovarianceStamped, '/dvl/velocity', 10)
         self.pub_alt = self.create_publisher(Float64, '/dvl/altitude', 10)
-        self.create_timer(1.0 / float(g('rate')), self.ping)
+        self.create_timer(1.0 / float(g('rate')), self.periodic)
         self.locked = None
         self.misses = 0          # consecutive pings without bottom lock
         self.get_logger().info(
@@ -71,7 +73,8 @@ class DvlSensor(Node):
     def on_odom(self, msg):
         self.odom = msg
 
-    def ping(self):
+    def periodic(self):
+        """Generate one simulated DVL ping on each sensor timer tick."""
         if self.odom is None:
             return
         o = self.odom

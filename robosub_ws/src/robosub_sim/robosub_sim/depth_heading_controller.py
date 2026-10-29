@@ -1,102 +1,39 @@
 #!/usr/bin/env python3
-"""Hold a depth, a heading, a roll, and (with a DVL) a position. PIDs on /sub/state.
+"""Hold depth, heading, roll and horizontal position using /sub/state.
 
-This is the first closed loop on the sub. Everything the vehicle does at
-competition (dive to 1.5 m, turn to face the gate, drive through it) is
-built from "hold this depth, hold this heading, and meanwhile go forward".
+Inputs are /sub/setpoint/depth (+down metres), heading/roll (right-hand ROS
+radians), position (world x/y metres), move (forward metres), roll_turns,
+and optional /sub/cmd_vel_manual surge/sway efforts. Setpoints persist.
+Startup manual_control=True disables all automatic command publication;
+the Xbox program then owns /sub/cmd_vel without depending on state input.
 
-    inputs
-        /sub/state             nav_msgs/Odometry   from state_estimator
-        /sub/setpoint/depth    std_msgs/Float64    metres, +down
-        /sub/setpoint/heading  std_msgs/Float64    yaw, rad, CCW +, 0 = where
-                                                   the estimator started
-        /sub/setpoint/roll     std_msgs/Float64    roll, rad, + = port side
-                                                   down (left roll)
-        /sub/setpoint/roll_turns std_msgs/Float64  do this many full rolls
-                                                   (1.0 = one 360, - = other
-                                                   way), then level out
-        /sub/setpoint/position geometry_msgs/Point  x, y in the estimator's
-                                                   frame (metres from where
-                                                   it started; z ignored)
-        /sub/setpoint/move     std_msgs/Float64    "go this many metres
-                                                   forward" along the
-                                                   heading setpoint (or the
-                                                   current heading if none):
-                                                   the mission-level move
-        /sub/cmd_vel_manual    geometry_msgs/Twist optional: linear.x / y
-                                                   (surge / sway) pass
-                                                   straight through so you
-                                                   can drive while it holds.
-                                                   A non-zero manual command
-                                                   CANCELS position mode.
-    output
-        /sub/cmd_vel           geometry_msgs/Twist -> thruster_mixer
+periodic() runs at the configured calculation rate. The Twist published on
+/sub/cmd_vel carries normalized body efforts, not velocity setpoints. The
+geometry allocator uses normalized M5 power, or T200 force/torque limits
+at the configured reference voltage, according to the vehicle profile.
 
-LIFE CYCLE. The node starts IDLE and publishes nothing, so the mixer's
-watchdog keeps the thrusters at zero and you can still drive by hand on
-/sub/cmd_vel exactly as before. The first setpoint on either topic arms
-that loop and the node starts owning /sub/cmd_vel at `rate` Hz. From then
-on, drive surge/sway through /sub/cmd_vel_manual, not /sub/cmd_vel (two
-publishers on one topic just fight).
+The controller starts idle. Missing/stale state stops command publication;
+the mixer and command stage each have a separate command timeout. Position
+hold additionally requires a fresh DVL estimate. Nonzero manual surge/sway
+cancels position hold. The layout has no independent pitch authority.
 
-If /sub/state goes stale for more than 0.5 s the node stops publishing:
-no estimate, no thrust. Never remove that.
-
-POSITION MODE needs the DVL. The estimator flags pose.covariance[0] = -1
-when the DVL is silent; the controller then commands zero surge/sway
-rather than pushing blind on a frozen position. The world-frame error is
-rotated into the body frame by yaw, so the sub drives toward the point
-without having to face it (it is holonomic in the plane).
-
-ROLL is different from the other loops: the sub is self-righting (centre
-of buoyancy above centre of gravity), so holding any non-zero roll means
-pushing against a righting torque of about  20 N.m * sin(roll)  forever.
-Two things handle that. A feedforward term  roll_ff * sin(roll)  cancels
-the known part at every angle (roll_ff = righting moment / thrust torque
-per unit ~ 20 / 35), and ki mops up what is left. Full thrust on the two
-verticals is ~35 N.m, so any angle is reachable, but a hard roll leaves
-nothing for depth (same two thrusters).
-
-A 360 (barrel roll) cannot be a setpoint, because angles wrap. Instead
-/sub/setpoint/roll_turns ramps an UNWRAPPED setpoint at roll_spin_rate
-through the full turn, tracking the unwrapped roll, then hands back to the
-ordinary roll hold at the angle it started from. While the sub is well off
-level, the heave and yaw commands are scaled by cos(roll): upside down,
-"up" on the body's thrusters is down in the world, and the depth loop must
-not fight itself (or wind up) during the manoeuvre.
-
-SIGNS. Depth is +down; the mixer's heave is +up. So a positive depth error
-("too shallow, go deeper") becomes a NEGATIVE linear.z. The heading error
-is wrapped to [-pi, pi] so the sub always turns the short way round.
-
-TUNING. Gains are in "mixer units per metre / per radian"; 1.0 on the
-output saturates the thrusters (see GAIN_* in thruster_mixer.py).
-    depth:   kp 1.0 is 60 N per metre of error. The water damps heave hard
-             (zW = -120 N per m/s) so little D is needed. Ki is what beats
-             the ~5 N of positive buoyancy: without it the sub parks a few
-             centimetres shallow of the setpoint forever.
-    heading: kp 1.0 is ~32 N.m per radian. Yaw damping (nR = -25) is
-             strong, so kd stays small. No steady yaw disturbance in the
-             pool, so ki defaults to 0.
-    roll:    unit output is now full thrust (~35 N.m), so gains are small:
-             kp 0.75 (~26 N.m/rad), ki 0.5, kd 0.08. roll_ff 0.56 carries
-             the righting moment. roll_spin_rate 0.6 rad/s: at that rate
-             water drag (~9 N.m) + righting (~20 N.m) still fits in 35.
-    position: kp 0.5 is ~42 N per metre of error; with kd 0.3 and the
-             water's own drag that is close to critically damped. Output is
-             capped at pos_limit so a far-away point means "cruise", not
-             "full throttle".
+During multi-turn rolls, an unwrapped target is ramped at roll_spin_rate.
+Depth and yaw efforts are scaled by cos(roll), and depth integration pauses
+when well off level. Gains/feedforward remain tuning defaults, not measured
+physical vehicle dynamics. Recheck them after geometry/voltage changes.
 """
 import math
 
+from geometry_msgs.msg import Point, Twist
+from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
-from rclpy.time import Time
-from geometry_msgs.msg import Twist, Point
-from nav_msgs.msg import Odometry
 from std_msgs.msg import Float64
 
+from robosub_sim import constants
 from robosub_sim.state_estimator import q_to_rpy
+from robosub_sim.tuning import TunableNumbers, fixed_parameter
+from robosub_sim.vehicle_profiles import profile_from_node
 
 
 def clamp(v, lo, hi):
@@ -131,19 +68,37 @@ class PID:
 class DepthHeadingController(Node):
     def __init__(self):
         super().__init__('depth_heading_controller')
-        d = self.declare_parameter
-        d('rate', 20.0)
-        d('depth_kp', 1.0);   d('depth_ki', 0.2);   d('depth_kd', 0.3)
-        d('heading_kp', 1.0); d('heading_ki', 0.0); d('heading_kd', 0.1)
-        d('pos_kp', 0.5);     d('pos_kd', 0.3);     d('pos_limit', 0.5)
-        d('roll_kp', 0.75);   d('roll_ki', 0.5);    d('roll_kd', 0.08)
-        d('roll_ff', 0.56);   d('roll_spin_rate', 0.6)
-        d('i_limit', 1.0)
-        d('state_timeout', 0.5)
-        g = lambda n: float(self.get_parameter(n).value)
-
-        self.rate = g('rate')
-        self.state_timeout = g('state_timeout')
+        profile = profile_from_node(self)
+        self.manual_control = fixed_parameter(self, 'manual_control', False)
+        self.rate = float(fixed_parameter(
+            self, 'rate', constants.CONTROLLER_DEFAULTS['rate']))
+        if not (constants.MIN_CONTROL_RATE_HZ <= self.rate
+                <= constants.MAX_CONTROL_RATE_HZ):
+            raise ValueError('Controller rate must be between 1 and 1000 Hz')
+        output_rate = float(fixed_parameter(
+            self, 'output_rate', constants.CONTROLLER_DEFAULTS['output_rate']))
+        if not (constants.MIN_CONTROL_RATE_HZ <= output_rate
+                <= profile.MAX_OUTPUT_RATE_HZ):
+            raise ValueError(
+                f'Output rate must be 1-{profile.MAX_OUTPUT_RATE_HZ:g} Hz')
+        self.output_rate = min(output_rate, self.rate)
+        self.next_output_time = None
+        self.state_timeout = float(fixed_parameter(
+            self, 'state_timeout',
+            constants.CONTROLLER_DEFAULTS['state_timeout']))
+        if not math.isfinite(self.state_timeout) or self.state_timeout <= 0:
+            raise ValueError('state_timeout must be finite and positive')
+        self.tuning = TunableNumbers(self)
+        for name, default in constants.CONTROLLER_DEFAULTS.items():
+            if name in ('rate', 'output_rate', 'state_timeout'):
+                continue
+            self.tuning.number(
+                name, default,
+                minimum=1e-6 if name == 'roll_spin_rate' else 0.0,
+                maximum=1.0 if name == 'pos_limit' else None,
+                description=name.replace('_', ' '),
+            )
+        g = lambda n: self.tuning.numbers[n].get()
         self.depth_pid = PID(g('depth_kp'), g('depth_ki'), g('depth_kd'), g('i_limit'))
         self.heading_pid = PID(g('heading_kp'), g('heading_ki'), g('heading_kd'), g('i_limit'))
         self.roll_pid = PID(g('roll_kp'), g('roll_ki'), g('roll_kd'), g('i_limit'))
@@ -151,6 +106,22 @@ class DepthHeadingController(Node):
         self.spin_rate = g('roll_spin_rate')
         self.surge_pid = PID(g('pos_kp'), 0.0, g('pos_kd'), 0.0, g('pos_limit'))
         self.sway_pid = PID(g('pos_kp'), 0.0, g('pos_kd'), 0.0, g('pos_limit'))
+
+        for prefix, pid in (
+            ('depth', self.depth_pid),
+            ('heading', self.heading_pid),
+            ('roll', self.roll_pid),
+        ):
+            for gain in ('kp', 'ki', 'kd'):
+                self.tuning.numbers[f'{prefix}_{gain}'].bind_to(pid, gain)
+            self.tuning.numbers['i_limit'].bind_to(pid, 'i_limit')
+        for pid in (self.surge_pid, self.sway_pid):
+            self.tuning.numbers['pos_kp'].bind_to(pid, 'kp')
+            self.tuning.numbers['pos_kd'].bind_to(pid, 'kd')
+            self.tuning.numbers['pos_limit'].bind_to(pid, 'out_limit')
+        self.tuning.numbers['roll_ff'].bind_to(self, 'roll_ff')
+        self.tuning.numbers['roll_spin_rate'].bind_to(self, 'spin_rate')
+        self.last_control_time = None
 
         self.depth_sp = None
         self.heading_sp = None
@@ -161,7 +132,7 @@ class DepthHeadingController(Node):
         self.spin_sp = None         # ramping unwrapped setpoint during a roll_turns
         self.spin_end = None        # where the ramp stops (unwrapped)
         self.state = None
-        self.state_rx = None        # wall time we last heard from the estimator
+        self.state_rx = None        # node-clock time of the last state message
         self.manual = Twist()
         self.manual_rx = None
 
@@ -174,9 +145,11 @@ class DepthHeadingController(Node):
         self.create_subscription(Point, '/sub/setpoint/position', self.on_pos_sp, 10)
         self.create_subscription(Float64, '/sub/setpoint/move', self.on_move, 10)
         self.create_subscription(Twist, '/sub/cmd_vel_manual', self.on_manual, 10)
-        self.create_timer(1.0/self.rate, self.control)
+        self.control_timer = self.create_timer(1.0/self.rate, self.periodic)
 
         self.get_logger().info(
+            'depth_heading_controller: Xbox owns commands; hold loops disabled'
+            if self.manual_control else
             'depth_heading_controller up, IDLE until a setpoint arrives on '
             '/sub/setpoint/depth or /sub/setpoint/heading')
 
@@ -241,7 +214,20 @@ class DepthHeadingController(Node):
             self.get_logger().info('manual surge/sway received: position mode cancelled')
             self.pos_sp = None
 
-    def control(self):
+    def periodic(self):
+        """Run the active hold loops on each controller timer tick."""
+        if self.manual_control:
+            return
+        now = self.now()
+        previous = self.last_control_time
+        self.last_control_time = now
+        dt = 1.0 / self.rate if previous is None else now - previous
+        if dt <= 0.0 or dt > self.state_timeout:
+            self.next_output_time = None
+            for pid in (self.depth_pid, self.heading_pid, self.roll_pid,
+                        self.surge_pid, self.sway_pid):
+                pid.reset()
+            return
         if (self.depth_sp is None and self.heading_sp is None
                 and self.pos_sp is None and self.roll_sp is None):
             return                              # idle: leave /sub/cmd_vel alone
@@ -253,7 +239,6 @@ class DepthHeadingController(Node):
             self.roll_pid.reset()
             return
 
-        dt = 1.0/self.rate
         cmd = Twist()
 
         depth = -self.state.pose.pose.position.z
@@ -305,7 +290,11 @@ class DepthHeadingController(Node):
                 vy_b = self.state.twist.twist.linear.y
                 cmd.linear.x = self.surge_pid.step(ex_b, vx_b, dt)
                 cmd.linear.y = self.sway_pid.step(ey_b, vy_b, dt)
-        elif self.manual_rx is not None and self.now() - self.manual_rx < 0.5:
+        elif (
+            self.manual_rx is not None
+            and self.now() - self.manual_rx
+            < constants.MANUAL_COMMAND_TIMEOUT_S
+        ):
             # Surge / sway from the operator, if recent.
             cmd.linear.x = self.manual.linear.x
             cmd.linear.y = self.manual.linear.y
@@ -322,7 +311,17 @@ class DepthHeadingController(Node):
             err = wrap_pi(self.heading_sp - yaw)
             cmd.angular.z = self.heading_pid.step(err, yaw_rate, dt) * upright
 
-        self.pub.publish(cmd)
+        if (self.output_rate == self.rate or self.next_output_time is None
+                or now >= self.next_output_time):
+            self.pub.publish(cmd)
+            period = 1.0 / self.output_rate
+            if self.next_output_time is None or self.output_rate == self.rate:
+                self.next_output_time = now + period
+            else:
+                # Preserve the publication phase without sending old outputs
+                # in a burst after a delayed callback.
+                skipped = math.floor((now - self.next_output_time) / period)
+                self.next_output_time += (skipped + 1) * period
 
 
 def main():

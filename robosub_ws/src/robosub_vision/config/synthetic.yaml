@@ -1,4 +1,3 @@
-# Software examples only. Mesh origins and landmarks are in their given units.
 image_size: [640, 480]
 focal_px: 550
 distance: [0.5, 2.0]

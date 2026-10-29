@@ -1,51 +1,120 @@
-"""Bring up the whole SIM: Gazebo + bridge + sensor stand-ins + the vehicle stack.
+"""Simulation environment plus the shared movement launch description."""
 
-    ros2 launch robosub_sim pool.launch.py          # with GUI
-    ros2 launch robosub_sim pool.launch.py gui:=false
+from pathlib import Path
+import tempfile
 
-The vehicle stack (mixer, estimator, controller) comes from vehicle.launch.py,
-the same file the Jetson runs, so what you test here is what drives the sub.
-This file only adds what the sim needs instead of hardware.
-"""
-import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument,
+    ExecuteProcess,
+    IncludeLaunchDescription,
+    OpaqueFunction,
+    RegisterEventHandler,
+)
+from launch.event_handlers import OnShutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
+from robosub_sim import constants
+from robosub_sim.simulation_world import configured_world
+
+
+def start_world(context):
+    package = Path(get_package_share_directory("robosub_sim"))
+    text = configured_world(
+        (package / "worlds/pool.sdf").read_text(),
+        package / "meshes",
+        LaunchConfiguration("vehicle").perform(context),
+    )
+    with tempfile.NamedTemporaryFile(
+        mode="w", prefix="robosub-world-", suffix=".sdf", delete=False
+    ) as file:
+        file.write(text)
+        world = Path(file.name)
+
+    def cleanup(_context):
+        world.unlink(missing_ok=True)
+        return []
+
+    gui = LaunchConfiguration("gui")
+    gazebo = ExecuteProcess(
+        cmd=[
+            "gz",
+            "sim",
+            "-r",
+            PythonExpression(["'' if '", gui, "' == 'true' else '-s'"]),
+            str(world),
+        ],
+        output="screen",
+    )
+    return [
+        RegisterEventHandler(
+            OnShutdown(on_shutdown=[OpaqueFunction(function=cleanup)])
+        ),
+        gazebo,
+    ]
 
 
 def generate_launch_description():
-    pkg = get_package_share_directory('robosub_sim')
-    world = os.path.join(pkg, 'worlds', 'pool.sdf')
-    bridge_cfg = os.path.join(pkg, 'config', 'bridge.yaml')
-
-    gui = LaunchConfiguration('gui')
-
-    # "-r" runs immediately, "-s" is server-only (headless).
-    gz = ExecuteProcess(
-        cmd=['gz', 'sim', '-r', PythonExpression(
-            ["'' if '", gui, "' == 'true' else '-s'"]), world],
-        output='screen',
-    )
-
-    # Gazebo topics <-> ROS topics (odom, imu, altimeter, camera, thrust).
+    package = Path(get_package_share_directory("robosub_sim"))
     bridge = Node(
-        package='ros_gz_bridge',
-        executable='parameter_bridge',
-        parameters=[{'config_file': bridge_cfg}],
-        output='screen',
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        parameters=[{"config_file": str(package / "config/bridge.yaml")}],
+        output="screen",
     )
-
-    # Sensor stand-ins: the drivers the real vehicle has, faked from Gazebo.
-    depth = Node(package='robosub_sim', executable='depth_sensor', output='screen')   # altimeter -> /depth
-    dvl = Node(package='robosub_sim', executable='dvl_sensor', output='screen')       # ground truth -> /dvl/*
-
+    sensors = [
+        Node(
+            package="robosub_sim",
+            executable=executable,
+            output="screen",
+            parameters=[
+                {
+                    "use_sim_time": True,
+                    "vehicle_profile": LaunchConfiguration("vehicle"),
+                }
+            ],
+        )
+        for executable in ("depth_sensor", "dvl_sensor")
+    ]
     vehicle = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(pkg, 'launch', 'vehicle.launch.py')))
-
-    return LaunchDescription([
-        DeclareLaunchArgument('gui', default_value='true'),
-        gz, bridge, depth, dvl, vehicle,
-    ])
+        PythonLaunchDescriptionSource(
+            str(package / "launch/vehicle.launch.py")
+        ),
+        launch_arguments={
+            "vehicle": LaunchConfiguration("vehicle"),
+            "manual_control": LaunchConfiguration("manual_control"),
+            "use_sim_time": "true",
+            "simulate_actuators": "true",
+            "tuning": LaunchConfiguration("tuning"),
+            "tuning_file": LaunchConfiguration("tuning_file"),
+            "control_rate": LaunchConfiguration("control_rate"),
+            "output_rate": LaunchConfiguration("output_rate"),
+        }.items(),
+    )
+    return LaunchDescription(
+        [
+            DeclareLaunchArgument(
+                "vehicle",
+                default_value=constants.DEFAULT_VEHICLE_PROFILE,
+                choices=["current_m5", "future_t200"],
+            ),
+            DeclareLaunchArgument("manual_control", default_value="false"),
+            DeclareLaunchArgument("gui", default_value="true"),
+            DeclareLaunchArgument("tuning", default_value="false"),
+            DeclareLaunchArgument("tuning_file", default_value=""),
+            DeclareLaunchArgument(
+                "control_rate",
+                default_value=str(constants.CONTROLLER_DEFAULTS["rate"]),
+            ),
+            DeclareLaunchArgument(
+                "output_rate",
+                default_value=str(constants.CONTROLLER_DEFAULTS["output_rate"]),
+            ),
+            OpaqueFunction(function=start_world),
+            bridge,
+            *sensors,
+            vehicle,
+        ]
+    )

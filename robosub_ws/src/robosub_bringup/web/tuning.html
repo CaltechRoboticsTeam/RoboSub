@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RoboSub developer menu</title>
+<style>
+body { font: 14px monospace; margin: 20px; }
+table { border-collapse: collapse; margin-bottom: 12px; }
+th, td { padding: 4px 12px 4px 0; text-align: left; }
+input { width: 10em; }
+pre { white-space: pre-wrap; }
+</style>
+<h1>RoboSub developer menu</h1>
+<section id="gamepad" hidden>
+<h2>Xbox controller</h2>
+<p id="gamepad-mode"></p>
+<p>Left stick: forward/back and strafe. Right stick: turn and up/down.
+Center both sticks and release RB, then hold RB to move.</p>
+<div id="gamepad-browser">
+<label>Controller <select id="gamepad-device"></select></label>
+<button id="gamepad-enable">Enable controller input</button>
+<button id="gamepad-stop">Disable controller input</button>
+</div>
+<pre id="gamepad-status" role="status">Connecting...</pre>
+<pre id="gamepad-preview">Waiting for robot commands...</pre>
+</section>
+<h2>Live tuning</h2>
+<p>Values apply while running. Refresh is manual. Restart restores code
+defaults unless a tuning file is supplied.</p>
+<button id="refresh">Refresh</button>
+<button id="export">Export applied values as YAML</button>
+<pre id="status" role="status">Loading...</pre>
+<main id="nodes"></main>
+<script>
+const token = "__TOKEN__";
+const output = document.querySelector("#status");
+const container = document.querySelector("#nodes");
+let snapshot = [];
+
+async function request(path, options = {}) {
+  const response = await fetch(path, options);
+  const data = await response.json();
+  if (!response.ok) throw Error(data.error || response.statusText);
+  return data;
+}
+
+function cell(row, text, tag = "td") {
+  const element = document.createElement(tag);
+  element.textContent = text;
+  row.append(element);
+  return element;
+}
+
+function render(node) {
+  const section = document.createElement("section");
+  const title = document.createElement("h2");
+  title.textContent = node.name;
+  section.append(title);
+  const table = document.createElement("table");
+  const header = table.insertRow();
+  for (const name of ["Parameter", "Value", "Default", "Description"]) {
+    cell(header, name, "th");
+  }
+  const fields = [];
+  for (const parameter of node.parameters) {
+    const row = table.insertRow();
+    cell(row, parameter.name);
+    const input = document.createElement("input");
+    input.type = "number";
+    input.step = parameter.type === 2 ? "1" : "any";
+    input.value = parameter.value;
+    input.disabled = parameter.read_only;
+    input.setAttribute("aria-label", parameter.name);
+    cell(row, "").append(input);
+    cell(row, parameter.default);
+    cell(row, parameter.description);
+    fields.push({parameter, input});
+  }
+  section.append(table);
+  const apply = document.createElement("button");
+  apply.textContent = "Apply changes";
+  apply.onclick = async () => {
+    const parameters = {};
+    for (const {parameter, input} of fields) {
+      if (input.disabled) continue;
+      if (!input.value.trim() || !input.checkValidity()) {
+        output.textContent = `Invalid number: ${parameter.name}`;
+        return;
+      }
+      const value = Number(input.value);
+      if (!Number.isFinite(value)) {
+        output.textContent = `Invalid number: ${parameter.name}`;
+        return;
+      }
+      if (value !== parameter.value) parameters[parameter.name] = value;
+    }
+    if (!Object.keys(parameters).length) {
+      output.textContent = "No changes.";
+      return;
+    }
+    apply.disabled = true;
+    output.textContent = `Applying changes to ${node.name}...`;
+    try {
+      await request("/api/values", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Tuning-Token": token,
+        },
+        body: JSON.stringify({node: node.name, parameters}),
+      });
+      for (const {parameter} of fields) {
+        if (parameter.name in parameters) {
+          parameter.value = parameters[parameter.name];
+        }
+      }
+      output.textContent = `Applied to ${node.name}.`;
+    } catch (error) {
+      output.textContent = error.message;
+    } finally {
+      apply.disabled = false;
+    }
+  };
+  section.append(apply);
+  container.append(section);
+}
+
+async function refresh() {
+  output.textContent = "Reading tunable parameters...";
+  try {
+    snapshot = (await request("/api/values")).nodes;
+    container.replaceChildren();
+    snapshot.forEach(render);
+    output.textContent = snapshot.length
+      ? "Loaded. Changes are sent only when Apply is clicked."
+      : "No tuning-enabled nodes found. Launch with tuning:=true, then refresh.";
+  } catch (error) {
+    output.textContent = error.message;
+  }
+}
+
+document.querySelector("#refresh").onclick = refresh;
+document.querySelector("#export").onclick = () => {
+  const lines = [];
+  for (const node of snapshot) {
+    lines.push(`${node.name}:`, "  ros__parameters:");
+    for (const parameter of node.parameters) {
+      let value = String(parameter.value);
+      if (parameter.type === 3) {
+        const [mantissa, exponent] = value.split("e");
+        const decimal = mantissa.includes(".") ? mantissa : `${mantissa}.0`;
+        value = exponent === undefined ? decimal : `${decimal}e${exponent}`;
+      }
+      lines.push(`    ${parameter.name}: ${value}`);
+    }
+  }
+  const url = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], {
+    type: "text/yaml",
+  }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "robot-tuning.yaml";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+refresh();
+</script>
+<script src="/gamepad.js"></script>
+</html>

@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-humble-tf2-tools \
       ros-humble-tf2-ros \
       ros-humble-teleop-twist-keyboard \
+      ros-humble-joy \
       ros-humble-rqt-common-plugins \
       ros-humble-rqt-tf-tree \
       ros-humble-image-transport-plugins \
