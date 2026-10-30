@@ -39,7 +39,7 @@ For the HTML tuning/joystick page and robot-relative driving, on the Jetson:
 
 ```bash
 cd ~/robosub-field/current
-./joystick.sh --execute teleop_scale:=0.5
+./joystick.sh --execute teleop_scale:=1.0
 ```
 
 In another Mac terminal:
@@ -49,9 +49,8 @@ ssh -N -L 8765:127.0.0.1:8765 crt@100.95.114.100
 ```
 
 Open [http://127.0.0.1:8765](http://127.0.0.1:8765), enable controller input,
-center sticks with RB released, then press RB once to enable driving. Press it again to disable;
+use the sticks/triggers, and click Disable to stop. RB is unused;
 Ctrl-C stops the launch. Use this with the robot in water and people clear.
-See [the Xbox guide](../../docs/software/gamepad.md) for controls and limits.
 
 Omit `--execute` for previews without opening USB. The live path bypasses PX4
 and requires the existing Teensy Serial1 image. Do not run a USB pulse alongside it. All six motor slots use the supplied order:

@@ -49,7 +49,11 @@ class OperatorPanel:
         )
         if self.source == "browser":
             self.publisher = node.create_publisher(Joy, "/operator/joy", 1)
-            self.bridge = BrowserGamepad(self.publish_joy)
+        else:
+            self.publisher = node.create_publisher(
+                Bool, "/operator/input_enabled", 1
+            )
+        self.bridge = BrowserGamepad(self.publish_joy)
 
     def on_command(self, message):
         self.store(
@@ -67,16 +71,14 @@ class OperatorPanel:
         with self.lock:
             self.values[key] = (time.monotonic(), value)
 
-    def publish_joy(self, axes, held):
-        message = Joy()
-        if not axes:
-            self.publisher.publish(message)
+    def publish_joy(self, axes, enabled):
+        if self.source == "local":
+            self.publisher.publish(Bool(data=enabled))
             return
+        message = Joy()
         message.header.stamp = self.node.get_clock().now().to_msg()
         message.axes = [float(value) for value in axes]
-        index = constants.GAMEPAD_ENABLE_BUTTON["browser"]
-        message.buttons = [0] * (index + 1)
-        message.buttons[index] = int(held)
+        message.buttons = [int(enabled)]
         self.publisher.publish(message)
 
     def update(self, data):

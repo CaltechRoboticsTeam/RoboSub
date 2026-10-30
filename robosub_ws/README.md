@@ -2,15 +2,8 @@
 
 For the separate ZED 2i perception launch and calibration workflow, see
 [underwater vision](../docs/software/vision.md).
-For a file-by-file guide, see [the control code map](../docs/software/control.md).
-For the master launcher and developer menu, see
-[robot startup and tuning](../docs/software/runtime.md).
 For deployment and current-submarine MAVROS checks, see
 [field testing](../docs/software/field-testing.md).
-For Xbox input from the Mac or Linux, see
-[controller setup](../docs/software/gamepad.md).
-For measured motor/sensor positions and the M5 power / T200 PWM paths, see
-[vehicle profiles and M5/T200 commands](../docs/software/thrusters.md).
 
 ROS 2 **Humble** + Gazebo **Harmonic**, in a container. The movement stack is
 exercised with simulated sensors. Real manual M5 driving uses the optional
@@ -198,10 +191,10 @@ The master launcher's `mode:=real` starts the real ZED stack and includes
 by simulation. Real pressure/DVL adapters and the ZED IMU adapter remain
 missing. Without sensor inputs, the estimator waits and automatic hold stays
 idle. Manual joystick control sends body-relative efforts directly, with
-`actuators:=teensy_usb` enabling M5 motor output. Follow the
-[controller setup](../docs/software/gamepad.md) for the launch and HTML page.
+`actuators:=teensy_usb` enabling M5 motor output.
 There is no robot startup service yet.
-Use the vision Python environment and interpreter command in the runtime guide.
+For the ZED Python environment, see
+[underwater vision](../docs/software/vision.md).
 
 Movement tuning defaults live in
 `src/robosub_control/robosub_control/config/constants.py`. Current measured mounts and M5

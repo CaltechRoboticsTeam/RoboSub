@@ -66,10 +66,8 @@ MISSION_DEFAULTS = {
     "step_timeout": 60.0,
 }
 
-# Xbox input: body-relative surge/sway/heave/yaw, with RB press-to-toggle.
+# Xbox input: body-relative surge/sway/heave/yaw, with explicit page enable/disable.
 GAMEPAD_DEADZONE = 0.08
-GAMEPAD_MAX_EFFORT = 0.5
+GAMEPAD_MAX_EFFORT = 1.0
 GAMEPAD_PUBLISH_RATE_HZ = 20.0
 GAMEPAD_INPUT_TIMEOUT_S = 0.25
-# W3C standard Gamepad layout versus ROS SDL game_controller_node layout.
-GAMEPAD_ENABLE_BUTTON = {"browser": 5, "local": 10}

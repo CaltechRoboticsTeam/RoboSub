@@ -170,7 +170,7 @@ because a topic name exists without data.
 The supplied M5 order is 0=FR, 1=FL, 2=BR, 3=BL, 4=RD, 6=LD.
 Verify physical motor directions before sustained driving. Deployment does
 not flash a receiver. The separate USB pulse tool requires an explicit slot
-selection; [the joystick guide](gamepad.md) uses the supplied six-motor map.
+selection.
 
 Sources: [MAVROS native manual-send units](https://github.com/mavlink/mavros/blob/ros2/mavros/src/plugins/manual_control.cpp),
 [PX4 UUV control](https://github.com/PX4/PX4-Autopilot/blob/main/src/modules/uuv_att_control/uuv_att_control.cpp),

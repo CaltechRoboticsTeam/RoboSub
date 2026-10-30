@@ -30,12 +30,8 @@ nav:
 
   - Software:
       - Setup: software/setup.md
-      - Robot startup and tuning: software/runtime.md
-      - Control code map: software/control.md
-      - Xbox controller: software/gamepad.md
       - Current-sub field tests: software/field-testing.md
       - Teensy USB bridge: software/teensy-usb.md
-      - Vehicle profiles and M5 commands: software/thrusters.md
       - Future T200 thrusters and PWM: software/thrusters-t200.md
       - Underwater vision: software/vision.md
       - CVAT labeling: software/cvat.md

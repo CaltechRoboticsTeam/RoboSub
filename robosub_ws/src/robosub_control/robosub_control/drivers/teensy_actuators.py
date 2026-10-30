@@ -32,7 +32,6 @@ class TeensyActuators(Node):
         m5_power_slots([0.0] * 6, self.max_power)
         self.allocator = ThrustAllocator(vehicle="current_m5")
         self.last_rx = None
-        self.ready = False
         self.pending = [NEUTRAL_US] * SLOTS
         self.publisher = self.create_publisher(
             Float64MultiArray, current_m5.SENT_TOPIC, 1
@@ -66,15 +65,10 @@ class TeensyActuators(Node):
 
     def stop(self):
         self.last_rx = None
-        self.ready = False
         self.pending = [NEUTRAL_US] * SLOTS
 
     def on_targets(self, message):
         now = time.monotonic()
-        if self.last_rx is not None and not (
-            0 <= now - self.last_rx <= constants.GAMEPAD_INPUT_TIMEOUT_S
-        ):
-            self.stop()
         try:
             dimensions = message.layout.dim
             if (
@@ -91,11 +85,8 @@ class TeensyActuators(Node):
             self.stop()
             self.get_logger().error(str(error), throttle_duration_sec=2.0)
             return
-        # A fresh neutral frame is required after startup or lost input.
-        if all(value == 0.0 for value in commands):
-            self.ready = True
         self.last_rx = now
-        self.pending = values if self.ready else [NEUTRAL_US] * SLOTS
+        self.pending = values
 
     def periodic(self):
         if self.last_rx is None or not (

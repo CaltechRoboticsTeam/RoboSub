@@ -31,17 +31,9 @@ except ImportError:
 
 
 class GamepadTests(unittest.TestCase):
-    def buttons(self, source, pressed):
-        index = 5 if source == "browser" else 10
-        values = [0] * (index + 1)
-        values[index] = int(pressed)
-        return values
-
     def enabled_control(self, source="browser", scale=0.5):
         control = GamepadControl(source, scale)
-        control.accept([0.0] * 6, self.buttons(source, False), 0.0)
-        control.accept([0.0] * 6, self.buttons(source, True), 0.01)
-        self.assertTrue(control.enabled)
+        control.set_enabled(True)
         return control
 
     def test_stick_directions_and_layouts_match(self):
@@ -51,55 +43,43 @@ class GamepadTests(unittest.TestCase):
                     control = self.enabled_control(source)
                     axes = [0.0] * 6
                     axes[axis] = sign * direction
-                    control.accept(axes, self.buttons(source, False), 0.05)
+                    control.accept(axes, [1], 0.05)
                     expected = [0.0] * 5
                     expected[output] = 0.5 * direction
                     self.assertEqual(control.sample(0.1), tuple(expected))
 
-    def test_press_edges_toggle_and_holding_does_not_repeat(self):
-        control = self.enabled_control()
-        pressed = self.buttons("browser", True)
-        released = self.buttons("browser", False)
+    def test_enable_accepts_moving_sticks_and_only_disable_turns_it_off(self):
+        control = GamepadControl("browser")
         moving = [0, -1, 0, 0, 0, 0]
-        control.accept(moving, pressed, 0.05)
-        control.accept(moving, pressed, 0.1)
-        control.accept(moving, released, 0.15)
-        self.assertGreater(control.sample(0.16)[0], 0)
-        control.accept(moving, pressed, 0.2)
+        control.accept(moving, [1], 0.0)
+        self.assertTrue(control.enabled)
+        self.assertGreater(control.sample(0.01)[0], 0)
+        control.accept(moving, [1], 0.05)
+        self.assertGreater(control.sample(0.06)[0], 0)
+        control.accept(moving, [0], 0.1)
         self.assertFalse(control.enabled)
-        self.assertEqual(control.sample(0.21), ZERO)
-        control.accept(moving, pressed, 0.22)
-        self.assertFalse(control.enabled)
-        control.accept(moving, released, 0.23)
-        control.accept(moving, pressed, 0.24)
-        self.assertFalse(control.enabled)  # Enabling requires neutral.
+        self.assertEqual(control.sample(0.11), ZERO)
 
     def test_triggers_roll_right_left_and_cancel(self):
         for source, sign in (("browser", 1), ("local", -1)):
             control = self.enabled_control(source)
             for lt, rt, expected in ((0, 1, 0.5), (1, 0, -0.5), (1, 1, 0)):
-                control.accept(
-                    [0, 0, 0, 0, sign * lt, sign * rt],
-                    self.buttons(source, False),
-                    0.1,
-                )
+                control.accept([0, 0, 0, 0, sign * lt, sign * rt], [1], 0.1)
                 self.assertEqual(control.sample(0.11), (0, 0, 0, expected, 0))
 
-    def test_timeout_and_stop_require_neutral_and_a_new_press(self):
+    def test_stale_input_zeros_output_without_disarming_and_fresh_input_resumes(
+        self,
+    ):
         control = self.enabled_control()
-        pressed = self.buttons("browser", True)
-        released = self.buttons("browser", False)
-        control.accept([0, -1, 0, 0, 0, 0], released, 0.1)
+        moving = [0, -1, 0, 0, 0, 0]
+        control.accept(moving, [1], 0.0)
         self.assertEqual(control.sample(0.5), ZERO)
-        control.accept([0.0] * 6, pressed, 0.51)
-        self.assertFalse(control.enabled)
-        control.accept([0.0] * 6, released, 0.52)
-        control.accept([0.0] * 6, pressed, 0.53)
         self.assertTrue(control.enabled)
+        control.accept(moving, [1], 0.6)
+        self.assertGreater(control.sample(0.61)[0], 0)
         control.stop()
-        control.accept([0.0] * 6, pressed, 0.54)
         self.assertFalse(control.enabled)
-        self.assertEqual(control.sample(0.1), ZERO)
+        self.assertEqual(control.sample(0.62), ZERO)
 
     def test_trigger_roll_reaches_rd_and_ld_usb_slots(self):
         from robosub_control.drivers.teensy_usb import m5_power_slots
@@ -108,11 +88,12 @@ class GamepadTests(unittest.TestCase):
         allocator = ThrustAllocator()
         control = self.enabled_control()
         for lt, rt, direction in ((0, 1, 1), (1, 0, -1)):
-            control.accept(
-                [0, 0, 0, 0, lt, rt], self.buttons("browser", False), 0.1
+            control.accept([0, 0, 0, 0, lt, rt], [1], 0.1)
+            slots = m5_power_slots(
+                allocator.commands(
+                    allocator.allocate(control.sample(0.11)).targets
+                )
             )
-            targets = allocator.allocate(control.sample(0.11)).targets
-            slots = m5_power_slots(allocator.commands(targets))
             self.assertEqual(slots[:4], [1500] * 4)
             self.assertGreater((slots[4] - 1500) * direction, 0)
             self.assertLess((slots[6] - 1500) * direction, 0)
@@ -120,14 +101,14 @@ class GamepadTests(unittest.TestCase):
 
     def test_deadzone_and_diagonal_bound(self):
         control = self.enabled_control("local", 0.7)
-        control.accept([0.01] * 4 + [0, 0], self.buttons("local", False), 0.05)
+        control.accept([0.01] * 4 + [0, 0], [], 0.05)
         self.assertEqual(control.sample(0.1), ZERO)
-        control.accept([1.0] * 4 + [0, -1], self.buttons("local", False), 0.15)
+        control.accept([1.0] * 4 + [0, -1], [], 0.15)
         surge, sway, heave, roll, yaw = control.sample(0.2)
         self.assertAlmostEqual(math.hypot(surge, sway), 0.7)
         self.assertEqual((heave, roll, yaw), (0.7, 0.7, 0.7))
 
-    def test_invalid_inputs_clear_enable(self):
+    def test_invalid_inputs_zero_output_without_disarming(self):
         for axes in (
             [0] * 4,
             [float("nan")] * 6,
@@ -137,12 +118,21 @@ class GamepadTests(unittest.TestCase):
         ):
             control = self.enabled_control()
             with self.assertRaises(ValueError):
-                control.accept(axes, self.buttons("browser", False), 0.1)
+                control.accept(axes, [1], 0.1)
             self.assertEqual(control.sample(0.11), ZERO)
-            self.assertFalse(control.enabled)
+            self.assertTrue(control.enabled)
         for scale in (0, 1.1, float("nan"), True):
             with self.assertRaises(ValueError):
                 GamepadControl("browser", scale)
+
+    def test_local_buttons_are_not_movement_controls(self):
+        control = self.enabled_control("local")
+        for button in (0, 1, 0):
+            control.accept([0, 1, 0, 0, 0, 0], [button] * 11, 0.1)
+            self.assertGreater(control.sample(0.11)[0], 0)
+        control.set_enabled(False)
+        control.accept([0, 1, 0, 0, 0, 0], [1] * 11, 0.2)
+        self.assertEqual(control.sample(0.21), ZERO)
 
 
 class BrowserBridgeTests(unittest.TestCase):
@@ -151,41 +141,39 @@ class BrowserBridgeTests(unittest.TestCase):
             "session": "one",
             "sequence": 0,
             "axes": [0.0] * 6,
-            "held": False,
+            "enabled": True,
             **changes,
         }
 
-    def test_late_packets_cannot_override_stop_or_second_operator(self):
+    def test_late_input_cannot_override_disable_or_second_operator(self):
         publish = Mock()
         bridge = BrowserGamepad(publish)
         with patch(
             "robosub_bringup.gamepad_bridge.time.monotonic", return_value=1
         ):
-            bridge.update(self.frame())
-            bridge.update(self.frame(sequence=2))
+            bridge.update(self.frame(axes=[0, -1, 0, 0, 0, 0]))
+            bridge.update(self.frame(sequence=2, enabled=False))
             with self.assertRaises(ValueError):
-                bridge.update(self.frame(sequence=1, held=True))
+                bridge.update(self.frame(sequence=1))
             with self.assertRaises(ValueError):
                 bridge.update(self.frame(session="two"))
         self.assertEqual(publish.call_count, 2)
+        self.assertFalse(publish.call_args.args[1])
         with patch(
             "robosub_bringup.gamepad_bridge.time.monotonic", return_value=2
         ):
-            with self.assertRaises(ValueError):
-                bridge.update(self.frame(sequence=3, held=True))
-            bridge.update(self.frame(session="two"))
+            bridge.update(self.frame(sequence=3, axes=[0, -1, 0, 0, 0, 0]))
         self.assertEqual(publish.call_count, 3)
+        self.assertTrue(publish.call_args.args[1])
 
-    def test_explicit_page_stop_is_a_reset_not_a_bumper_release(self):
+    def test_disable_is_forwarded_as_explicit_state(self):
         publish = Mock()
         bridge = BrowserGamepad(publish)
         bridge.update(self.frame())
-        bridge.update(self.frame(sequence=1, stop=True))
-        publish.assert_called_with([], False)
-        with self.assertRaises(ValueError):
-            bridge.update(self.frame(sequence=0, held=True))
+        bridge.update(self.frame(sequence=1, enabled=False))
+        self.assertEqual(publish.call_args.args, ((0.0,) * 6, False))
 
-    def test_rejects_unmapped_or_nonfinite_browser_frames(self):
+    def test_rejects_invalid_browser_frames(self):
         publish = Mock()
         bridge = BrowserGamepad(publish)
         for changes in (
@@ -193,9 +181,8 @@ class BrowserBridgeTests(unittest.TestCase):
             {"axes": [0.0] * 5},
             {"session": ""},
             {"sequence": True},
-            {"held": 1},
-            {"held": True},
-            {"axes": [1.0] * 6},
+            {"enabled": 1},
+            {"enabled": None},
         ):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 bridge.update(self.frame(**changes))
@@ -242,19 +229,14 @@ class GamepadRosTests(unittest.TestCase):
             self.fail("Expected USB command did not arrive")
 
         try:
-            spin_until(lambda: driver.ready)
-            teleop.on_joy(Joy(axes=[0.0] * 6, buttons=[0] * 6))
-            teleop.on_joy(Joy(axes=[0.0] * 6, buttons=[0] * 5 + [1]))
             teleop.on_joy(
-                Joy(
-                    axes=[0.0, -1.0, 0.0, -1.0, 0.0, 0.0], buttons=[0] * 5 + [1]
-                )
+                Joy(axes=[0.0, -1.0, 0.0, -1.0, 0.0, 0.0], buttons=[1])
             )
             spin_until(lambda: received and received[-1][1])
             values, _ = received[-1]
             self.assertTrue(all(abs(value - 1500) <= 100 for value in values))
-            self.assertGreater(values[0], 1500)  # FR forward.
-            self.assertGreater(values[1], 1500)  # FL forward.
+            self.assertLess(values[0], 1500)  # FR forward, inverted polarity.
+            self.assertLess(values[1], 1500)  # FL forward, inverted polarity.
             self.assertLess(values[2], 1500)  # BR reverse.
             self.assertLess(values[3], 1500)  # BL reverse.
             self.assertLess(values[4], 1500)  # RD upward.
@@ -263,8 +245,7 @@ class GamepadRosTests(unittest.TestCase):
             executor.remove_node(teleop)
             executor.remove_node(mixer)
             spin_until(lambda: received[-1] == ([1500] * 8, False))
-            self.assertFalse(driver.ready)
-            # Delayed nonneutral targets cannot re-enable a timed-out driver.
+            # Fresh targets resume directly after a stale-input neutral output.
             from std_msgs.msg import Float64MultiArray, MultiArrayDimension
 
             target = Float64MultiArray(data=[0.1] * 6)
@@ -273,14 +254,12 @@ class GamepadRosTests(unittest.TestCase):
             ]
             driver.on_targets(target)
             driver.periodic()
-            self.assertEqual(received[-1], ([1500] * 8, False))
+            self.assertTrue(received[-1][1])
             target.data = [0.0] * 6
             driver.on_targets(target)
-            self.assertTrue(driver.ready)
             target.layout.dim[0].label = "FL,FR,BR,BL,LD,RD"
             driver.on_targets(target)
             driver.periodic()
-            self.assertFalse(driver.ready)
             self.assertEqual(received[-1], ([1500] * 8, False))
         finally:
             executor.shutdown()
@@ -352,13 +331,12 @@ class GamepadRosTests(unittest.TestCase):
                 time.sleep(0.01)
             self.fail("Gamepad ROS condition did not arrive")
 
-        def post(sequence, held=False, axes=None, token="test", stop=False):
+        def post(sequence, enabled=True, axes=None, token="test"):
             body = {
                 "session": "test",
                 "sequence": sequence,
-                "held": held,
+                "enabled": enabled,
                 "axes": axes or [0.0] * 6,
-                "stop": stop,
             }
             request = Request(
                 address + "/api/gamepad",
@@ -374,8 +352,6 @@ class GamepadRosTests(unittest.TestCase):
                 post(0, token="wrong")
             self.assertEqual(error.exception.code, 403)
             post(0)
-            wait_for(lambda: teleop.control.ready)
-            post(1, held=True)
             wait_for(lambda: teleop.control.enabled)
             post(2, axes=[0.0, -1.0, 0.5, -0.5, 0.0, 0.0])
             wait_for(lambda: commands[-1].linear.x > 0.4)
@@ -390,13 +366,12 @@ class GamepadRosTests(unittest.TestCase):
             )
             self.assertLess(commands[-1].angular.z, 0.0)
             self.assertGreater(commands[-1].linear.z, 0.0)
-            post(3, stop=True)
+            post(3, enabled=False)
             wait_for(lambda: not teleop.control.enabled)
             wait_for(lambda: commands[-1].linear.x == 0.0)
             wait_for(
                 lambda: browser.operator.snapshot()["preview"] == [0.0] * 6
             )
-            self.assertFalse(teleop.control.ready)
             self.assertFalse(actuator.force_pubs)
             controller.pub = Mock()
             controller.state = Odometry()
@@ -445,10 +420,8 @@ class GamepadRosTests(unittest.TestCase):
             Twist, "/test/paused_cmd", lambda value: commands.append(value), 10
         )
         try:
-            teleop.on_joy(Joy(axes=[0.0] * 6, buttons=[0] * 6))
-            teleop.on_joy(Joy(axes=[0.0] * 6, buttons=[0] * 5 + [1]))
             teleop.on_joy(
-                Joy(axes=[0.0, -1.0, 0.0, 0.0, 0.0, 0.0], buttons=[0] * 5 + [1])
+                Joy(axes=[0.0, -1.0, 0.0, 0.0, 0.0, 0.0], buttons=[1])
             )
             deadline = time.monotonic() + 2
             while time.monotonic() < deadline:

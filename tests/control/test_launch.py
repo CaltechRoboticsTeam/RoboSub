@@ -39,7 +39,7 @@ class LaunchTests(unittest.TestCase):
                 "mission": "false",
                 "tuning": "false",
                 "teleop": "off",
-                "teleop_scale": "0.5",
+                "teleop_scale": "1.0",
                 "joy_device": "0",
                 "actuators": "preview",
                 "teensy_device": "/test/teensy",

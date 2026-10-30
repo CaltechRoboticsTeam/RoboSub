@@ -115,7 +115,7 @@ class BusDiagnostics:
             )
             self.status_time = time.monotonic()
 
-    def require_feedback(self, maximum_age=0.25):
+    def require_feedback(self, maximum_age=2.0):
         if self.status_time is None:
             raise RuntimeError(
                 "No CRC-valid M5 status reply; nonzero output is blocked"

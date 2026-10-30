@@ -19,7 +19,7 @@ Xbox -> body effort -> mixer -> Jetson USB driver -> Teensy -> RS-485 -> M5
 PX4's UART to the Teensy is no longer a command source in the new firmware.
 Direct USB commands bypass PX4 arming entirely. The master launcher enables
 the joystick transport with `actuators:=teensy_usb` in real M5 teleop mode.
-See [Xbox driving and the HTML page](gamepad.md). The default remains preview.
+The default remains preview.
 
 ## Confirmed UART
 

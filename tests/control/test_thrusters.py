@@ -261,16 +261,43 @@ class M5Tests(unittest.TestCase):
             result = allocator.allocate(efforts)
             commands = allocator.commands(result.targets)
             self.assertTrue(all(-1 <= value <= 1 for value in commands))
-            np.testing.assert_allclose(commands, result.targets)
+            np.testing.assert_allclose(
+                commands, np.array(result.targets) * [-1, -1, 1, 1, 1, 1]
+            )
         with self.assertRaisesRegex(ValueError, "PWM"):
             allocator.pwm_by_channel([0] * 6)
         for invalid in ([0] * 5, [float("nan")] * 6, [1.1] * 6):
             with self.assertRaises(ValueError):
                 allocator.commands(invalid)
-        with patch.dict(current_m5.THRUSTER_REVERSED, {"FR": True}):
+        with patch.dict(current_m5.THRUSTER_REVERSED, {"FR": False}):
             self.assertEqual(
-                ThrustAllocator().commands([0.3, 0, 0, 0, 0, 0])[0], -0.3
+                ThrustAllocator().commands([0.3, 0, 0, 0, 0, 0])[0], 0.3
             )
+
+    def test_front_polarity_correction_matches_reported_horizontal_motion(self):
+        allocator = ThrustAllocator()
+        # This plant model reproduces the reported forward cancellation,
+        # left-strafe -> clockwise, and left-yaw -> right-strafe observations.
+        plant = allocator.wrench_matrix * [-1, -1, 1, 1, 1, 1]
+        for axis in (0, 1, 4):
+            for direction in (-1, 1):
+                effort = [0.0] * 5
+                effort[axis] = 0.5 * direction
+                result = allocator.allocate(effort)
+                uncorrected = plant @ result.targets
+                if axis == 0:
+                    self.assertAlmostEqual(uncorrected[0], 0, places=10)
+                elif axis == 1:
+                    self.assertLess(uncorrected[5] * direction, 0)
+                else:
+                    self.assertLess(uncorrected[1] * direction, 0)
+                actual = plant @ allocator.commands(result.targets)
+                np.testing.assert_allclose(
+                    actual[list(CONTROLLED_ROWS)],
+                    np.array(result.requested)[list(CONTROLLED_ROWS)]
+                    * result.scale,
+                    atol=1e-10,
+                )
 
     def test_current_world_uses_m5_diameter_and_measured_mounts(self):
         source = ROOT / "robosub_ws/src/robosub_sim/worlds/pool.sdf"

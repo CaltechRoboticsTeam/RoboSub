@@ -198,7 +198,7 @@ class M5ActuationRosTests(unittest.TestCase):
             sender = observer.create_timer(
                 0.02, lambda: publisher.publish(target)
             )
-            wait_for(lambda: received and received[-1].data[0] > 0.1)
+            wait_for(lambda: received and received[-1].data[0] < -0.1)
             message = received[-1]
             self.assertEqual(message.layout.dim[0].label, "FR,FL,BR,BL,RD,LD")
             self.assertTrue(all(-1 <= value <= 1 for value in message.data))

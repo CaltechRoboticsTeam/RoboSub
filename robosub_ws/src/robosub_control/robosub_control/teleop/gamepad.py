@@ -1,4 +1,4 @@
-"""Xbox input mapping and movement toggle, independent of ROS."""
+"""Xbox input mapping with explicit operator enable, independent of ROS."""
 
 import math
 from numbers import Real
@@ -25,14 +25,14 @@ def validate_axes(axes):
 
 
 class GamepadControl:
-    """Map input to surge/sway/heave/roll/yaw; RB edges toggle movement.
+    """Map fresh input to surge/sway/heave/roll/yaw while enabled.
 
-    Startup, invalid input and timeouts require neutral controls with RB
-    released, followed by a new press. Releasing RB leaves movement enabled.
+    Only an explicit operator command changes enabled state. Stale or invalid
+    input produces zero effort without requiring another enable command.
     """
 
     def __init__(self, source, max_effort=constants.GAMEPAD_MAX_EFFORT):
-        if source not in constants.GAMEPAD_ENABLE_BUTTON:
+        if source not in ("browser", "local"):
             raise ValueError("Gamepad source must be browser or local")
         if (
             type(max_effort) not in (int, float)
@@ -48,12 +48,20 @@ class GamepadControl:
             raise ValueError("Invalid gamepad deadzone or input timeout")
         self.stop()
 
-    def stop(self):
-        self.ready = False
-        self.enabled = False
-        self.pressed = False
+    def clear_input(self):
         self.last_rx = None
         self.command = ZERO
+
+    def stop(self):
+        self.enabled = False
+        self.clear_input()
+
+    def set_enabled(self, enabled):
+        if type(enabled) is not bool:
+            raise ValueError("Enabled state must be boolean")
+        self.enabled = enabled
+        if not enabled:
+            self.clear_input()
 
     def accept(self, axes, buttons, now):
         try:
@@ -62,29 +70,16 @@ class GamepadControl:
             if self.source == "local" and len(values) == 6:
                 values[4:] = [-value for value in values[4:]]
             values = validate_axes(values)
-            index = constants.GAMEPAD_ENABLE_BUTTON[self.source]
-            if len(buttons) <= index or type(buttons[index]) is not int:
-                raise ValueError("Missing/invalid RB button")
-            if buttons[index] not in (0, 1):
-                raise ValueError("RB button must be zero or one")
+            if self.source == "browser":
+                if len(buttons) != 1 or type(buttons[0]) is not int:
+                    raise ValueError("Missing operator enabled state")
+                if buttons[0] not in (0, 1):
+                    raise ValueError("Operator enabled state must be 0 or 1")
+                self.set_enabled(bool(buttons[0]))
         except (ValueError, TypeError, OverflowError):
-            self.stop()
+            self.clear_input()
             raise ValueError("Invalid gamepad input") from None
-        self.sample(now)
         self.last_rx = now
-        pressed = bool(buttons[index])
-        neutral = all(abs(value) <= self.deadzone for value in values)
-        rising = pressed and not self.pressed
-        self.pressed = pressed
-        if not self.ready:
-            self.ready = neutral and not pressed
-            self.command = ZERO
-            return
-        if rising:
-            if self.enabled:
-                self.enabled = False
-            elif neutral:
-                self.enabled = True
         if not self.enabled:
             self.command = ZERO
             return
@@ -112,5 +107,5 @@ class GamepadControl:
 
     def sample(self, now):
         if self.last_rx is None or not 0 <= now - self.last_rx <= self.timeout:
-            self.stop()
+            self.clear_input()
         return self.command

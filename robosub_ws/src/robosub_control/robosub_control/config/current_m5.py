@@ -73,7 +73,15 @@ SIM_DVL_OFFSET_M = DVL_POSITION_BODY_M
 NAME = "current_m5"
 ACTUATOR_KIND = "m5"
 GEOMETRY_CONFIRMED = True
-THRUSTER_REVERSED = {name: False for name in THRUSTER_NAMES}
+# Front polarity inferred from reported surge cancellation and sway/yaw swap.
+THRUSTER_REVERSED = {
+    "FR": True,
+    "FL": True,
+    "BR": False,
+    "BL": False,
+    "RD": False,
+    "LD": False,
+}
 THRUSTER_DIRECTIONS_CONFIRMED = False
 # Motor IDs select array slots; reply node ID is a separate protocol field.
 M5_MOTOR_IDS = {"FR": 0, "FL": 1, "BR": 2, "BL": 3, "RD": 4, "LD": 6}

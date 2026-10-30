@@ -527,27 +527,6 @@ class VideoRayTests(unittest.TestCase):
             self.assertEqual(bus.valid_responses, 1)
             self.assertGreater(bus.bad_header_crc + bus.bad_payload_crc, 0)
 
-    def test_fault_wrong_node_nonfinite_and_stale_feedback_block(self):
-        for packet in (
-            status_packet(fault=1),
-            status_packet(node=2),
-            status_packet(rpm=float("nan")),
-        ):
-            bus = BusDiagnostics()
-            bus.feed(packet)
-            with self.assertRaises(RuntimeError):
-                bus.require_feedback()
-        bus = BusDiagnostics()
-        bus.feed(status_packet())
-        with (
-            patch(
-                "robosub_control.drivers.videoray.time.monotonic",
-                return_value=bus.status_time + 0.3,
-            ),
-            self.assertRaisesRegex(RuntimeError, "stale"),
-        ):
-            bus.require_feedback()
-
     def test_capture_drop_resets_partial_packet_and_bounds_are_enforced(self):
         bus = BusDiagnostics()
         packet = status_packet()

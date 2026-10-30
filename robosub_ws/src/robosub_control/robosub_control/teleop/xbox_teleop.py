@@ -18,6 +18,7 @@ class XboxTeleop(Node):
     def __init__(self):
         super().__init__("xbox_teleop")
         source = fixed_parameter(self, "source", "browser")
+        self.source = source
         scale = fixed_parameter(
             self, "max_effort", constants.GAMEPAD_MAX_EFFORT
         )
@@ -25,6 +26,10 @@ class XboxTeleop(Node):
         self.pub = self.create_publisher(Twist, "/sub/cmd_vel", 1)
         self.enabled_pub = self.create_publisher(Bool, "/operator/enabled", 1)
         self.create_subscription(Joy, "/operator/joy", self.on_joy, 1)
+        if source == "local":
+            self.create_subscription(
+                Bool, "/operator/input_enabled", self.on_enabled, 1
+            )
         self.wall_clock = Clock(clock_type=ClockType.STEADY_TIME)
         self.create_timer(
             1.0 / constants.GAMEPAD_PUBLISH_RATE_HZ,
@@ -32,15 +37,14 @@ class XboxTeleop(Node):
             clock=self.wall_clock,
         )
         self.get_logger().info(
-            f"Xbox {source} input: center sticks and release controls; "
-            "press RB to toggle movement. "
+            f"Xbox {source} input: use the page Enable/Disable buttons. "
             f"Maximum normalized effort: {scale:.0%}."
         )
 
+    def on_enabled(self, message):
+        self.control.set_enabled(message.data)
+
     def on_joy(self, message):
-        if not message.axes and not message.buttons:
-            self.control.stop()
-            return
         try:
             self.control.accept(message.axes, message.buttons, time.monotonic())
         except ValueError as error:
