@@ -3,17 +3,47 @@
 set -euo pipefail
 cd "$(dirname "$0")/docker"
 
-# Hand the container an X cookie so GUI apps (Gazebo, RViz) can draw.
-XAUTH=/tmp/.docker.xauth
-if [ ! -f "$XAUTH" ]; then
-  touch "$XAUTH"
-  xauth nlist "$DISPLAY" | sed -e 's/^..../ffff/' | xauth -f "$XAUTH" nmerge - 2>/dev/null || true
-  chmod 644 "$XAUTH"
+# SSH shells can reuse the logged-in desktop's display and authentication.
+if [[ -z "${DISPLAY:-}" ]] && command -v systemctl >/dev/null; then
+  while IFS='=' read -r name value; do
+    case "$name" in
+      DISPLAY|XAUTHORITY) export "$name=$value" ;;
+    esac
+  done < <(systemctl --user show-environment)
+fi
+: "${DISPLAY:?Run from a desktop session or set DISPLAY and XAUTHORITY.}"
+
+# Keep the X cookie private and refresh it after desktop logins.
+cookie_directory="${XDG_RUNTIME_DIR:-$HOME/.cache}"
+mkdir -p "$cookie_directory"
+export ROBOSUB_XAUTHORITY="$cookie_directory/robosub-$(id -u).xauth"
+touch "$ROBOSUB_XAUTHORITY"
+chmod 600 "$ROBOSUB_XAUTHORITY"
+xauth nlist "$DISPLAY" | sed 's/^..../ffff/' \
+  | xauth -f "$ROBOSUB_XAUTHORITY" nmerge -
+
+exec_flags=(-i)
+compose_flags=()
+if [[ -t 0 && -t 1 ]]; then
+  exec_flags+=(-t)
+else
+  compose_flags+=(-T)
 fi
 
-if [ "$(docker ps -q -f name=^robosub$)" ]; then
+container_command=(bash)
+if [[ $# -gt 0 ]]; then
+  container_command=(bash -lc '
+    source /opt/ros/humble/setup.bash
+    if [[ -f /ws/install/setup.bash ]]; then
+      source /ws/install/setup.bash
+    fi
+    exec "$@"
+  ' bash "$@")
+fi
+
+if [[ -n "$(docker ps -q -f name=^robosub$)" ]]; then
   echo ">> attaching to running container"
-  exec docker exec -it robosub bash
+  exec docker exec "${exec_flags[@]}" robosub "${container_command[@]}"
 fi
 
 compose_files=(-f compose.yaml)
@@ -24,4 +54,5 @@ if [[ "${ROBOSUB_GAMEPAD:-0}" == "1" ]]; then
   fi
   compose_files+=(-f compose.gamepad.yaml)
 fi
-docker compose "${compose_files[@]}" run --rm --name robosub robosub bash
+exec docker compose "${compose_files[@]}" run "${compose_flags[@]}" \
+  --rm --name robosub robosub "${container_command[@]}"

@@ -4,6 +4,7 @@ services:
     build:
       context: .
     container_name: robosub
+    init: true
     # Rootless Docker + nvidia-container-runtime (no-cgroups=true is already
     # set in /etc/nvidia-container-runtime/config.toml on this machine).
     runtime: nvidia
@@ -19,7 +20,7 @@ services:
       ROS_LOCALHOST_ONLY: 1
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - /tmp/.docker.xauth:/tmp/.docker.xauth:rw
+      - ${ROBOSUB_XAUTHORITY:?Use run.sh}:/tmp/.docker.xauth:ro
       - ../src:/ws/src
       - ../build:/ws/build
       - ../install:/ws/install
