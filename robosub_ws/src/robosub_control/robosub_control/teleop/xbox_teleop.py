@@ -25,7 +25,7 @@ from robosub_control.teleop.gamepad import (
     NO_BUTTONS,
 )
 
-STEP_INTERVAL_S = 2.0
+STEP_INTERVAL_S = {SELECT: 2.0, START: 0.0}
 
 
 class XboxTeleop(DepthHeadingController):
@@ -176,7 +176,7 @@ class XboxTeleop(DepthHeadingController):
             position = self.state.pose.pose.position
             self.measurement_origin = (position.x, position.y, yaw)
         self.measurement_button = button
-        self.next_step_time = wall_now + STEP_INTERVAL_S
+        self.next_step_time = wall_now + STEP_INTERVAL_S[button]
         self.assist_message = self.measurement_status(wall_now)
         self.get_logger().info(self.assist_message)
 
@@ -211,7 +211,9 @@ class XboxTeleop(DepthHeadingController):
             )
             if effort != self.measurement_effort:
                 self.measurement_effort = effort
-                self.next_step_time = wall_now + STEP_INTERVAL_S
+                self.next_step_time = (
+                    wall_now + STEP_INTERVAL_S[self.measurement_button]
+                )
                 self.get_logger().info(self.measurement_status(wall_now))
         self.assist_message = self.measurement_status(wall_now)
         command = Twist()

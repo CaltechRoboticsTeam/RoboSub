@@ -211,7 +211,7 @@ class AssistedGamepadTests(unittest.TestCase):
         self.assertEqual(self.node.measurement_effort, 0.01)
 
     def test_drag_keeps_forward_effort_and_holds_depth_heading_and_track(self):
-        from robosub_control.teleop.gamepad import RB, START
+        from robosub_control.teleop.gamepad import LB, RB, START
 
         self.node.depth_pid.kp = self.node.sway_pid.kp = 1.0
         self.node.sway_pid.kd = 0.0
@@ -220,7 +220,6 @@ class AssistedGamepadTests(unittest.TestCase):
         self.assertEqual(self.node.depth_sp, 1.0)
         self.assertEqual(self.node.roll_sp, 0.0)
         self.assertAlmostEqual(self.node.heading_sp, math.pi / 2)
-        self.node.next_step_time = 0.0
         self.tick(RB, yaw=math.pi / 2)
         self.tick(depth=1.1, yaw=math.pi / 2, x=2.2, y=5.0)
         command = self.node.pub.publish.call_args.args[0]
@@ -228,6 +227,13 @@ class AssistedGamepadTests(unittest.TestCase):
         self.assertGreater(command.linear.y, 0.0)
         self.assertGreater(command.linear.z, 0.0)
         self.assertEqual(self.node.depth_sp, 1.0)
+        self.tick(RB, yaw=math.pi / 2)
+        self.assertEqual(self.node.measurement_effort, 0.10)
+        self.tick(RB, yaw=math.pi / 2)
+        self.assertEqual(self.node.measurement_effort, 0.10)
+        self.tick(yaw=math.pi / 2)
+        self.tick(LB, yaw=math.pi / 2)
+        self.assertEqual(self.node.measurement_effort, 0.05)
         self.tick(dvl=False)
         self.assertIsNone(self.node.measurement_button)
         self.assert_neutral()
