@@ -6,17 +6,18 @@ from numbers import Real
 from robosub_control.config import constants
 
 ZERO = (0.0, 0.0, 0.0, 0.0, 0.0)
-NO_BUTTONS = (0, 0, 0, 0)
+LB, RB, SELECT, START = 4, 5, 6, 7
+NO_BUTTONS = (0,) * 8
 
 
 def validate_buttons(buttons):
-    """Validate the standard A, B, X, Y button order."""
+    """Normalize A/B/X/Y/LB/RB/Select/Start, accepting older face-only input."""
     values = tuple(buttons)
-    if len(values) != 4 or any(
+    if len(values) not in (4, 8) or any(
         type(value) is not int or value not in (0, 1) for value in values
     ):
-        raise ValueError("Expected A, B, X, Y as four 0/1 values")
-    return values
+        raise ValueError("Expected four or eight 0/1 controller buttons")
+    return values + (0,) * (8 - len(values))
 
 
 def validate_axes(axes):
@@ -83,15 +84,21 @@ class GamepadControl:
                 values[4:] = [-value for value in values[4:]]
             values = validate_axes(values)
             if self.source == "browser":
-                if len(buttons) not in (1, 5) or type(buttons[0]) is not int:
+                if len(buttons) not in (1, 5, 9) or type(buttons[0]) is not int:
                     raise ValueError("Missing operator enabled state")
                 if buttons[0] not in (0, 1):
                     raise ValueError("Operator enabled state must be 0 or 1")
                 self.set_enabled(bool(buttons[0]))
-                faces = buttons[1:] if len(buttons) == 5 else NO_BUTTONS
+                actions = buttons[1:] if len(buttons) > 1 else NO_BUTTONS
             else:
-                faces = buttons[:4] if len(buttons) >= 4 else NO_BUTTONS
-            faces = validate_buttons(faces)
+                # SDL game_controller_node uses different shoulder/menu slots.
+                if len(buttons) >= 11:
+                    actions = [
+                        buttons[index] for index in (0, 1, 2, 3, 9, 10, 4, 6)
+                    ]
+                else:
+                    actions = buttons[:4] if len(buttons) >= 4 else NO_BUTTONS
+            actions = validate_buttons(actions)
         except (ValueError, TypeError, OverflowError):
             self.clear_input()
             raise ValueError("Invalid gamepad input") from None
@@ -100,7 +107,7 @@ class GamepadControl:
             self.command = ZERO
             self.buttons = NO_BUTTONS
             return
-        self.buttons = faces
+        self.buttons = actions
 
         def axis(value):
             magnitude = max(0.0, abs(value) - self.deadzone)

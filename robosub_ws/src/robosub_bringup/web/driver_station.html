@@ -13,12 +13,18 @@ pre { white-space: pre-wrap; }
 <h2>Xbox controller</h2>
 <p id="gamepad-mode"></p>
 <p>Left stick: forward/back and strafe. Right stick: turn and up/down.
-RT rolls right; LT rolls left. RB is unused.
+RT rolls right; LT rolls left.
 Click Enable to use the inputs, and Disable to stop.</p>
 <p>Hold A: forward 1 m, then hold position/depth. Hold B: hold depth.
 Hold X: 0.5 m deeper. Hold Y: turn 90° clockwise and hold heading/depth.
 Release to end a maneuver. Stick or trigger input takes over immediately.
 Assistance needs fresh sensor feedback; A also needs DVL position.</p>
+<p>Tap Select/View: vertical-only hover measurement (all hold loops off).
+Tap Start/Menu: drag measurement with depth, roll, heading and sideways track
+held; pitch depends on physical balance. LB/RB decrease/increase effort by
+1% for hover or 5% for drag; wait 2 seconds between taps. Positive effort is
+up/forward. Modes start at zero; tap the same mode button to exit.
+Sticks/triggers or Disable end measurement. Drag also needs DVL feedback.</p>
 <div id="gamepad-browser">
 <label>Controller <select id="gamepad-device"></select></label>
 </div>

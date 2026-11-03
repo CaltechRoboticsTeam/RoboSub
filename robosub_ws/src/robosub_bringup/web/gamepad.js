@@ -1,4 +1,4 @@
-/* The page Enable/Disable buttons are the only movement controls. */
+/* Only the page Enable/Disable buttons change operator enable state. */
 (async () => {
   const panel = document.querySelector("#gamepad");
   const status = document.querySelector("#gamepad-status");
@@ -81,7 +81,7 @@
     if (!local) {
       const pad = navigator.getGamepads()[Number(select.value)];
       if (!pad || pad.mapping !== "standard" || pad.axes.length < 4 ||
-          pad.buttons.length < 8) {
+          pad.buttons.length < 10) {
         status.textContent = "Connect a standard controller and press a button.";
         return;
       }
@@ -92,7 +92,7 @@
     select.disabled = true;
     enable.disabled = true;
     stop.disabled = false;
-    status.textContent = "Input enabled. RB is unused. Click Disable to stop.";
+    status.textContent = "Input enabled. Click Disable to stop.";
   };
   stop.onclick = () => {
     enabled = false;
@@ -107,7 +107,7 @@
   window.addEventListener("gamepadconnected", devices);
   window.addEventListener("gamepaddisconnected", devices);
   devices();
-  status.textContent = "Click Enable controller input to start. RB is unused.";
+  status.textContent = "Click Enable controller input to start.";
 
   async function controllerInput(pad, signal) {
     const firefoxMac = /Firefox\//.test(navigator.userAgent) &&
@@ -135,7 +135,8 @@
     return {
       axes: [...pad.axes.slice(0, 4),
         pad.buttons[6].value, pad.buttons[7].value],
-      buttons: pad.buttons.slice(0, 4).map(button => button.pressed ? 1 : 0),
+      buttons: [0, 1, 2, 3, 4, 5, 8, 9].map(
+        index => pad.buttons[index].pressed ? 1 : 0),
     };
   }
 
@@ -147,7 +148,7 @@
     const timeout = setTimeout(() => pending.abort(), 500);
     try {
       let axes = [0, 0, 0, 0, 0, 0];
-      let buttons = [0, 0, 0, 0];
+      let buttons = Array(8).fill(0);
       let inputStatus = "Input enabled on the Linux controller.";
       if (enabled && !local) {
         const pad = navigator.getGamepads()[Number(select.value)];
@@ -156,7 +157,7 @@
           ({axes, buttons} = await controllerInput(pad, pending.signal));
           inputStatus = `${pad.id}\nSticks + LT/RT: ` +
             axes.map(value => value.toFixed(3)).join("  ") +
-            `\nA/B/X/Y: ${buttons.join("  ")}`;
+            `\nA/B/X/Y/LB/RB/Select/Start: ${buttons.join("  ")}`;
         } else {
           inputStatus = "Waiting for controller; input remains enabled.";
         }

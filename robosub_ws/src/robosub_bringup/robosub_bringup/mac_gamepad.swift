@@ -63,9 +63,12 @@ func controller() -> [String: Any]? {
     values.append(number)
   }
   var buttons: [Int] = []
-  // Xbox reserves button usage 3; X and Y are usages 4 and 5.
-  for usage in [1, 2, 4, 5] {
-    guard let element = inputs["9:\(usage)"],
+  // Xbox reserves button 3; View is Consumer AC Back (0x224).
+  let buttonKeys = [
+    "9:1", "9:2", "9:4", "9:5", "9:7", "9:8", "12:548", "9:12",
+  ]
+  for key in buttonKeys {
+    guard let element = inputs[key],
       let number = value(device, element, trigger: true)
     else { return nil }
     buttons.append(number > 0.5 ? 1 : 0)

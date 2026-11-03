@@ -84,7 +84,7 @@ class OperatorPanel:
         message = Joy()
         message.header.stamp = self.node.get_clock().now().to_msg()
         message.axes = [float(value) for value in axes]
-        # Browser input carries Enable first, then standard A/B/X/Y flags.
+        # Enable precedes A/B/X/Y/LB/RB/Select/Start.
         message.buttons = [int(enabled), *buttons]
         self.publisher.publish(message)
 

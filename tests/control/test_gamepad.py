@@ -20,7 +20,11 @@ sys.path.insert(0, str(ROOT / "tools/diagnostics"))
 sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_sim"))
 sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_bringup"))
 
-from robosub_control.teleop.gamepad import ZERO, GamepadControl  # noqa: E402
+from robosub_control.teleop.gamepad import (  # noqa: E402
+    ZERO,
+    GamepadControl,
+    validate_buttons,
+)
 
 try:
     import rclpy
@@ -40,6 +44,17 @@ class GamepadTests(unittest.TestCase):
         control.accept(moving, [0], 0.1)
         self.assertFalse(control.enabled)
         self.assertEqual(control.sample(0.11), ZERO)
+
+        for browser_index, local_index in enumerate((0, 1, 2, 3, 9, 10, 4, 6)):
+            actions = [int(index == browser_index) for index in range(8)]
+            control.accept([0] * 6, [1, *actions], 1.0)
+            self.assertEqual(control.buttons, tuple(actions))
+            local = GamepadControl("local")
+            local.set_enabled(True)
+            sdl = [int(index == local_index) for index in range(15)]
+            local.accept([0] * 6, sdl, 1.0)
+            self.assertEqual(local.buttons, tuple(actions))
+        self.assertEqual(validate_buttons([0] * 4), (0,) * 8)
 
 
 @unittest.skipIf(rclpy is None, "ROS Humble is not installed")
@@ -243,7 +258,17 @@ class GamepadRosTests(unittest.TestCase):
             wait_for(lambda: teleop.depth_sp is None)
             wait_for(lambda: commands[-1].linear.z == 0.0)
             self.assertTrue(teleop.control.enabled)
-            post(6, enabled=False)
+            post(6, buttons=[0, 0, 0, 0, 0, 0, 1, 0])
+            wait_for(lambda: teleop.measurement_button == 6)
+            post(7)
+            teleop.next_step_time = 0.0
+            post(8, buttons=[0, 0, 0, 0, 0, 1, 0, 0])
+            wait_for(lambda: commands[-1].linear.z == 0.01)
+            self.assertEqual(commands[-1].linear.x, 0.0)
+            self.assertEqual(commands[-1].angular.x, 0.0)
+            post(9, enabled=False)
+            wait_for(lambda: not teleop.control.enabled)
+            wait_for(lambda: commands[-1].linear.z == 0.0)
             with urlopen(address + "/gamepad.js", timeout=3) as response:
                 self.assertIn(b"gamepad script", response.read())
         finally:
