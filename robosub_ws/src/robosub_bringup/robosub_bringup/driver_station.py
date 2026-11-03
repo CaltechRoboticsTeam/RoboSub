@@ -5,6 +5,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import secrets
+import subprocess
+import sys
 import threading
 
 from ament_index_python.packages import get_package_share_directory
@@ -14,6 +16,7 @@ from rclpy.node import Node
 from robosub_control.utils.tuning import fixed_parameter
 
 from robosub_bringup.operator_panel import OperatorPanel
+from robosub_bringup.mac_gamepad import MacGamepad
 
 
 class DriverStation(Node):
@@ -25,7 +28,7 @@ class DriverStation(Node):
         self.operator = OperatorPanel(self)
 
 
-def make_handler(station, html, token, gamepad_script=""):
+def make_handler(station, html, token, gamepad_script="", native_gamepad=None):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, _format, *args):
             pass
@@ -48,7 +51,16 @@ def make_handler(station, html, token, gamepad_script=""):
             elif self.path == "/gamepad.js":
                 self.respond(200, gamepad_script, "text/javascript")
             elif self.path == "/api/gamepad":
-                self.respond(200, station.operator.snapshot())
+                data = station.operator.snapshot()
+                data["native_controller"] = native_gamepad is not None
+                self.respond(200, data)
+            elif self.path == "/api/controller":
+                self.respond(
+                    200,
+                    native_gamepad.snapshot()
+                    if native_gamepad is not None
+                    else {"controller": None},
+                )
             else:
                 self.respond(404, {"error": "Not found"})
 
@@ -91,13 +103,20 @@ def main():
 
     worker = threading.Thread(target=spin, daemon=True)
     worker.start()
+    native_gamepad = None
     try:
+        if sys.platform == "darwin" and node.operator.source == "browser":
+            try:
+                native_gamepad = MacGamepad()
+            except (OSError, subprocess.SubprocessError) as error:
+                node.get_logger().warning(f"Mac controller reader: {error}")
         share = Path(get_package_share_directory("robosub_bringup"))
         handler = make_handler(
             node,
             (share / "web/driver_station.html").read_text(),
             secrets.token_urlsafe(32),
             (share / "web/gamepad.js").read_text(),
+            native_gamepad,
         )
         with ThreadingHTTPServer(("127.0.0.1", node.port), handler) as server:
             node.get_logger().info(
@@ -118,6 +137,8 @@ def main():
         )
         return 1
     finally:
+        if native_gamepad is not None:
+            native_gamepad.close()
         executor.shutdown()
         worker.join(timeout=3)
         node.destroy_node()

@@ -85,24 +85,22 @@ THRUSTER_DIRECTIONS_CONFIRMED = False
 # Motor IDs select array slots; reply node ID is a separate protocol field.
 M5_MOTOR_IDS = {"FR": 0, "FL": 1, "BR": 2, "BL": 3, "RD": 4, "LD": 6}
 M5_REPLY_NODE_ID = None
-# The user corrected the initial 24 V report to a possible 48 V supply.
-M5_SUPPLY_VOLTAGE_V = None
-M5_POWER_TO_FORCE_CALIBRATION = None
+M5_SUPPLY_VOLTAGE_V = 24.0
+M5_POWER_TO_FORCE_CALIBRATION = "data/m5.json"
 M5_PROPELLER_DIAMETER_M = 0.090
 # Observed in the old prototype, not verified against the installed firmware.
 LEGACY_RECEIVER_BAUD = 115200
 LEGACY_RECEIVER_OUTPUT_SLOTS = 8
 # Software publication policy, not a manufacturer-rated update limit.
 MAX_OUTPUT_RATE_HZ = 100.0
-TARGET_TOPIC = "/sub/m5/power_targets"
-INDIVIDUAL_TOPIC_PREFIX = "/sub/m5/power"
+TARGET_TOPIC = "/sub/m5/force_targets"
+INDIVIDUAL_TOPIC_PREFIX = "/sub/m5/force"
 PREVIEW_TOPIC = "/sub/m5/power_preview"
 SENT_TOPIC = "/sub/m5/power_sent"
 NEUTRAL_COMMAND = 0.0
 INITIAL_NEUTRAL_S = 0.0
 
-# Axis scaling assumes equal motor authority in normalized power space.
-# Combined commands are scaled together if a thruster would saturate.
+# Axis limits use calibrated forward/reverse forces and measured moment arms.
 MIXER_AXIS_FRACTIONS = {
     "surge": 1.0,
     "sway": 1.0,

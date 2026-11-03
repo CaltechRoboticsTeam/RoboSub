@@ -7,7 +7,12 @@ setup(
     name="robosub_control",
     version="0.1.0",
     packages=find_packages(),
-    package_data={"robosub_control.thrusters": ["data/*.json", "data/*.md"]},
+    package_data={
+        "robosub_control.thrusters": [
+            "data/*.json",
+            "data/m5_team/*",
+        ]
+    },
     data_files=[
         (
             "share/ament_index/resource_index/packages",

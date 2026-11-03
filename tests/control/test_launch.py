@@ -63,6 +63,7 @@ class LaunchTests(unittest.TestCase):
                 "foxglove_port": "8766",
                 "control_rate": "20.0",
                 "output_rate": "100.0",
+                "max_power": "1.0",
                 **changes,
             }
         )

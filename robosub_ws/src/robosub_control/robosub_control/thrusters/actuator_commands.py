@@ -11,7 +11,6 @@ from std_msgs.msg import (
 
 from robosub_control.config import constants
 from robosub_control.config.vehicle_profiles import profile_from_node
-from robosub_control.thrusters.m5_sim import M5SimulationModel
 from robosub_control.thrusters.thrust_allocation import ThrustAllocator
 from robosub_control.utils.tuning import fixed_parameter
 
@@ -36,23 +35,13 @@ class ActuatorCommands(Node):
             )
         self.rate = min(rate, output_rate)
         self.allocator = ThrustAllocator(vehicle=profile.NAME)
-        self.m5_sim = None
+        self.max_power = fixed_parameter(self, "max_power", 1.0)
+        self.applied_commands = [0.0] * len(profile.THRUSTER_NAMES)
+        self.last_force_time = None
         if self.simulation and self.allocator.is_m5:
-            self.m5_sim = M5SimulationModel(
-                power_limit_w=fixed_parameter(
-                    self, "m5_sim_power_limit_w", 570.0
-                ),
-                command_power_exponent=fixed_parameter(
-                    self, "m5_sim_command_power_exponent", 3.0
-                ),
-                reverse_thrust_ratio=fixed_parameter(
-                    self, "m5_sim_reverse_thrust_ratio", 1.0
-                ),
-            )
-            self.get_logger().warn(
-                "M5 simulation assumes fixed 48 V and a digitized static "
-                f"thrust chart, capped at {self.m5_sim.power_limit_w:g} W. "
-                "Command-to-power and reverse thrust are uncalibrated."
+            self.get_logger().info(
+                f"M5: measured {self.allocator.model.voltage_v:g} V force "
+                "curve with directional asymmetry and an estimated ramp."
             )
         self.started = None
         self.last_rx = None
@@ -83,11 +72,6 @@ class ActuatorCommands(Node):
             f"{profile.NAME}: preview on {profile.PREVIEW_TOPIC}; "
             "physical output is handled separately."
         )
-        if not self.simulation:
-            self.get_logger().warn(
-                "Motor polarity and power calibration still require "
-                "physical verification."
-            )
 
     def on_targets(self, message):
         try:
@@ -102,7 +86,9 @@ class ActuatorCommands(Node):
                 raise ValueError(
                     "Thruster target array order is missing/invalid"
                 )
-            commands = self.allocator.commands(message.data)
+            commands = self.allocator.commands(
+                message.data, max_power=self.max_power
+            )
         except ValueError as error:
             self.last_rx = None
             self.get_logger().error(str(error), throttle_duration_sec=2.0)
@@ -124,11 +110,28 @@ class ActuatorCommands(Node):
             )
         ]
         self.preview_pub.publish(message)
+        applied = commands
+        if self.simulation and self.allocator.is_m5:
+            now = self.get_clock().now().nanoseconds * 1e-9
+            dt = (
+                max(0.0, now - self.last_force_time)
+                if self.last_force_time is not None
+                else 0.0
+            )
+            delta = self.allocator.model.command_slew_rate * dt
+            self.applied_commands = [
+                current + max(-delta, min(delta, target - current))
+                for current, target in zip(
+                    self.applied_commands, commands, strict=True
+                )
+            ]
+            self.last_force_time = now
+            applied = self.applied_commands
         for index, (name, publisher) in enumerate(self.force_pubs.items()):
             if self.allocator.is_m5:
-                polarity = -1.0 if profile.THRUSTER_REVERSED[name] else 1.0
-                force = self.m5_sim.force_from_command(commands[index])
-                force *= polarity
+                force = self.allocator.model.force_from_command(
+                    applied[index], profile.THRUSTER_REVERSED[name]
+                )
             else:
                 channel = profile.THRUSTER_CHANNELS[name]
                 force = self.allocator.model.force_from_pwm(
@@ -137,6 +140,8 @@ class ActuatorCommands(Node):
             publisher.publish(Float64(data=force))
 
     def publish_neutral(self):
+        self.applied_commands = [0.0] * len(self.profile.THRUSTER_NAMES)
+        self.last_force_time = None
         self.publish_commands(
             (self.profile.NEUTRAL_COMMAND,) * len(self.profile.THRUSTER_NAMES)
         )

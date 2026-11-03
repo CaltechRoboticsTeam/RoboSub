@@ -44,6 +44,9 @@ def start(context):
                             LaunchConfiguration("simulate_actuators"),
                             value_type=bool,
                         ),
+                        "max_power": ParameterValue(
+                            LaunchConfiguration("max_power"), value_type=float
+                        ),
                         "rate": ParameterValue(
                             LaunchConfiguration("control_rate"),
                             value_type=float,
@@ -117,6 +120,7 @@ def generate_launch_description():
             DeclareLaunchArgument("preview_commands", default_value="true"),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("simulate_actuators", default_value="false"),
+            DeclareLaunchArgument("max_power", default_value="1.0"),
             DeclareLaunchArgument(
                 "control_rate",
                 default_value=str(constants.CONTROLLER_DEFAULTS["rate"]),

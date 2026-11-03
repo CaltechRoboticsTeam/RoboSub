@@ -97,7 +97,9 @@ class TeensyActuators(Node):
                 or message.layout.data_offset != 0
             ):
                 raise ValueError("Invalid M5 target array order")
-            commands = self.allocator.commands(message.data)
+            commands = self.allocator.commands(
+                message.data, max_power=self.max_power
+            )
             values = m5_power_slots(commands, self.max_power)
         except ValueError as error:
             self.stop()

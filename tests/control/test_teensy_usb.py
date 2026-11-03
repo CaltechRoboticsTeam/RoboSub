@@ -279,7 +279,7 @@ class UsbTransportTests(unittest.TestCase):
 
 def status_packet(node=1, fault=0, rpm=0.0):
     header = struct.pack("<HBBBB", 0x0FF0, node, 2, 0xF0, 18)
-    payload = struct.pack("<BffffB", 1, rpm, 48.0, 0.1, 20.0, fault)
+    payload = struct.pack("<BffffB", 1, rpm, 24.0, 0.1, 20.0, fault)
     return (
         header
         + struct.pack("<I", binascii.crc32(header))
@@ -298,5 +298,5 @@ class VideoRayTests(unittest.TestCase):
                 bus.feed(packet[:split])
                 bus.feed(packet[split:])
                 self.assertEqual(bus.valid_responses, 1)
-                self.assertEqual(bus.statuses[-1]["bus_voltage_v"], 48.0)
+                self.assertEqual(bus.statuses[-1]["bus_voltage_v"], 24.0)
                 bus.require_feedback()

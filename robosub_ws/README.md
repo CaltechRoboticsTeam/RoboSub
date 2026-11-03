@@ -59,12 +59,13 @@ Sim supplies an IMU, pressure-depth stand-in and synthesized DVL velocity.
 Real mode's `hardware_sensors` adapts the existing MAVROS IMU, USB/MAVROS
 pressure and DVL odometry. Both feed `/imu/data_raw`, `/depth` and
 `/dvl/velocity` → estimator → `/sub/state` → controller → `/sub/cmd_vel`
-→ mixer → M5 output or simulated forces. Body axes are forward/left/up;
+→ mixer → `/sub/m5/force_targets` in newtons → M5 output or simulated forces.
+Body axes are forward/left/up;
 depth is positive down. The estimator uses a Mahony attitude filter and
 integrates DVL velocity for XY; yaw is relative to startup.
 
-`current_m5.py` holds mounts and motor IDs; sim physics is in
-`robosub_sim/config/current_m5_physics.json`. Drag, added mass and the M5
-power curve are approximations: pool measurements are still needed for
-physical PID tuning. The rendered camera does not feed visual SLAM.
+`current_m5.py` holds mounts, motor IDs and the 24 V supply. The shared M5
+force curve comes from the team's measurements in `thrusters/data/m5.json`.
+Sim physics is in `robosub_sim/config/current_m5_physics.json`; drag and added
+mass remain approximate. The rendered camera does not feed visual SLAM.
 [Real ZED vision](../docs/software/vision.md) is a separate stack.

@@ -43,6 +43,10 @@ Open the [driver station](http://127.0.0.1:18765). In Foxglove, choose
 MAVROS and the existing DVL reader must be running; this launch consumes
 those processes' sensor topics. `actuators:=preview` leaves USB closed.
 
+For the Bluetooth Xbox controller in Zen/Firefox on Mac, leave
+`ros2 run robosub_bringup mac_gamepad` running in a Mac ROS shell too.
+Mac-local simulation starts this reader automatically with the driver station.
+
 To stop, click **Disable**, press **Ctrl-C** in the mission terminal, and
 wait for recording to close. Before redeploying, exit that Jetson shell;
 reconnect and source the new release afterward.

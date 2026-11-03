@@ -109,29 +109,59 @@
   devices();
   status.textContent = "Click Enable controller input to start. RB is unused.";
 
+  async function controllerInput(pad, signal) {
+    const firefoxMac = /Firefox\//.test(navigator.userAgent) &&
+      /Mac/.test(navigator.platform);
+    if (firefoxMac && pad.id.toLowerCase().startsWith("045e-02fd-")) {
+      // Gecko drops this model's trigger axes before exposing the gamepad.
+      const path = settings.native_controller ? "/api/controller" :
+        "http://127.0.0.1:8767/api/controller";
+      let frame;
+      try {
+        const response = await fetch(path, {signal, cache: "no-store"});
+        if (!response.ok) throw Error("Controller reader unavailable");
+        frame = await response.json();
+      } catch (error) {
+        if (signal.aborted) throw error;
+        throw Error("Start the Mac controller reader on your Mac: " +
+          "ros2 run robosub_bringup mac_gamepad");
+      }
+      const input = frame.controller;
+      if (!input || input.id !== pad.id) {
+        throw Error(frame.error || "Waiting for the Mac Xbox controller");
+      }
+      return {axes: input.axes, buttons: input.buttons};
+    }
+    return {
+      axes: [...pad.axes.slice(0, 4),
+        pad.buttons[6].value, pad.buttons[7].value],
+      buttons: pad.buttons.slice(0, 4).map(button => button.pressed ? 1 : 0),
+    };
+  }
+
   async function sendInput() {
     if ((!enabled && !disablePending) || busy) return;
     const requestedEnabled = enabled;
-    let axes = [0, 0, 0, 0, 0, 0];
-    let buttons = [0, 0, 0, 0];
-    let inputStatus = "Input enabled on the Linux controller.";
-    if (enabled && !local) {
-      const pad = navigator.getGamepads()[Number(select.value)];
-      if (pad && pad.connected && pad.id === selectedId &&
-          pad.mapping === "standard") {
-        axes = [...pad.axes.slice(0, 4),
-          pad.buttons[6].value, pad.buttons[7].value];
-        buttons = pad.buttons.slice(0, 4).map(button => button.pressed ? 1 : 0);
-        inputStatus = `${pad.id}\nSticks + LT/RT: ` +
-          axes.map(value => value.toFixed(3)).join("  ");
-      } else {
-        inputStatus = "Waiting for controller; input remains enabled.";
-      }
-    }
     busy = true;
     pending = new AbortController();
     const timeout = setTimeout(() => pending.abort(), 500);
     try {
+      let axes = [0, 0, 0, 0, 0, 0];
+      let buttons = [0, 0, 0, 0];
+      let inputStatus = "Input enabled on the Linux controller.";
+      if (enabled && !local) {
+        const pad = navigator.getGamepads()[Number(select.value)];
+        if (pad && pad.connected && pad.id === selectedId &&
+            pad.mapping === "standard") {
+          ({axes, buttons} = await controllerInput(pad, pending.signal));
+          inputStatus = `${pad.id}\nSticks + LT/RT: ` +
+            axes.map(value => value.toFixed(3)).join("  ") +
+            `\nA/B/X/Y: ${buttons.join("  ")}`;
+        } else {
+          inputStatus = "Waiting for controller; input remains enabled.";
+        }
+      }
+      if (requestedEnabled !== enabled) return;
       await request("/api/gamepad", {
         method: "POST",
         headers: {

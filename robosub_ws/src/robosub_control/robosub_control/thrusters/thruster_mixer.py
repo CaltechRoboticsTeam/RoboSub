@@ -31,22 +31,16 @@ class ThrusterMixer(Node):
         self.create_subscription(Twist, "/sub/cmd_vel", self.on_cmd, 1)
         self.last_cmd = self.get_clock().now()
         self.create_timer(constants.THRUSTER_WATCHDOG_PERIOD_S, self.periodic)
-        if self.allocator.is_m5:
-            self.get_logger().warn(
-                "current_m5: normalized power allocation; power-to-force "
-                "calibration is unknown. Simulation uses a force proxy."
+        scales = ", ".join(
+            f"{axis}={scale:.3f} {'N' if index < 3 else 'N.m'}"
+            for index, (axis, scale) in enumerate(
+                zip(AXES, self.allocator.axis_scales, strict=True)
             )
-        else:
-            scales = ", ".join(
-                f"{axis}={scale:.3f} {'N' if index < 3 else 'N.m'}"
-                for index, (axis, scale) in enumerate(
-                    zip(AXES, self.allocator.axis_scales, strict=True)
-                )
-            )
-            self.get_logger().info(
-                f"future_t200: {self.allocator.model.voltage_v} V reference; "
-                f"per unit effort: {scales}. Mounts are a planning copy."
-            )
+        )
+        self.get_logger().info(
+            f"{profile.NAME}: {self.allocator.model.voltage_v:g} V; "
+            f"per unit effort: {scales}. Targets are newtons."
+        )
 
     def on_cmd(self, msg):
         self.last_cmd = self.get_clock().now()

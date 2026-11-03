@@ -112,6 +112,7 @@ def generate_launch_description():
             "simulate_actuators": "true",
             "control_rate": LaunchConfiguration("control_rate"),
             "output_rate": LaunchConfiguration("output_rate"),
+            "max_power": LaunchConfiguration("max_power"),
         }.items(),
     )
     return LaunchDescription(
@@ -122,6 +123,7 @@ def generate_launch_description():
                 choices=["current_m5", "future_t200"],
             ),
             DeclareLaunchArgument("manual_control", default_value="false"),
+            DeclareLaunchArgument("max_power", default_value="1.0"),
             DeclareLaunchArgument(
                 "world", default_value="pool", choices=["pool", "bb_woollett"]
             ),

@@ -5,7 +5,8 @@ import math
 
 import numpy as np
 
-from robosub_control.thrusters.t200 import T200Model
+from robosub_control.thrusters.m5 import M5Model
+from robosub_control.thrusters.t200 import T200Model, finite_number
 from robosub_control.config.vehicle_profiles import get_profile
 
 AXES = ("surge", "sway", "heave", "roll", "yaw")
@@ -21,19 +22,18 @@ class Allocation:
 
 
 class ThrustAllocator:
-    """Allocate body efforts to T200 force targets or M5 power targets.
-
-    T200 uses a static force curve in N and N.m. M5 uses an equal-authority
-    approximation in normalized power space, including the measured moment
-    arms. Its products are not physical forces or torques.
-    """
+    """Allocate body forces/torques, then convert forces to motor commands."""
 
     def __init__(self, voltage_v=None, vehicle="current_m5"):
         self.profile = profile = get_profile(vehicle)
         self.names = profile.THRUSTER_NAMES
         self.is_m5 = profile.ACTUATOR_KIND == "m5"
-        self.model = None
-        if not self.is_m5:
+        if self.is_m5:
+            voltage = (
+                profile.M5_SUPPLY_VOLTAGE_V if voltage_v is None else voltage_v
+            )
+            self.model = M5Model(voltage)
+        else:
             channels = list(profile.THRUSTER_CHANNELS.values())
             if set(profile.THRUSTER_CHANNELS) != set(self.names):
                 raise ValueError("Every T200 needs a board channel")
@@ -47,10 +47,6 @@ class ThrustAllocator:
                 else voltage_v
             )
             self.model = T200Model(voltage, profile.ESC_CURRENT_MODEL_LIMIT_A)
-        elif voltage_v is not None:
-            raise ValueError(
-                "M5 power targets do not use the T200 voltage model"
-            )
         if set(profile.THRUSTER_REVERSED) != set(self.names) or any(
             type(value) is not bool
             for value in profile.THRUSTER_REVERSED.values()
@@ -92,9 +88,7 @@ class ThrustAllocator:
         self.inverse = np.linalg.pinv(self.control_matrix, rcond=1e-12)
         self.limits = np.array(
             [
-                (-1.0, 1.0)
-                if self.is_m5
-                else self.model.force_limits(profile.THRUSTER_REVERSED[name])
+                self.model.force_limits(profile.THRUSTER_REVERSED[name])
                 for name in self.names
             ]
         )
@@ -108,9 +102,10 @@ class ThrustAllocator:
             scales.append(min(positive, negative) * fraction)
         self.axis_scales = np.array(scales)
 
-    def _maximum_scale(self, forces):
+    def _maximum_scale(self, forces, bounds=None):
         limits = []
-        for force, (low, high) in zip(forces, self.limits, strict=True):
+        bounds = self.limits if bounds is None else bounds
+        for force, (low, high) in zip(forces, bounds, strict=True):
             if force > 1e-12:
                 limits.append(high / force)
             elif force < -1e-12:
@@ -139,8 +134,8 @@ class ThrustAllocator:
             float(scale),
         )
 
-    def commands(self, targets):
-        """Convert targets to logical M5 powers or channel-ordered T200 PWM."""
+    def commands(self, targets, max_power=1.0):
+        """Convert newtons to named M5 commands or channel-ordered T200 PWM."""
         values = np.asarray(targets, dtype=float)
         if values.shape != (len(self.names),) or not np.all(
             np.isfinite(values)
@@ -148,11 +143,23 @@ class ThrustAllocator:
             raise ValueError("Expected six finite targets in named motor order")
         profile = self.profile
         if self.is_m5:
-            if np.any(np.abs(values) > 1.0 + 1e-12):
-                raise ValueError("M5 power targets must be between -1 and 1")
+            cap = finite_number(max_power, "M5 command limit")
+            if not 0 < cap <= 1:
+                raise ValueError("M5 command limit must be in (0, 1]")
+            low = self.model.force_from_command(-cap)
+            high = self.model.force_from_command(cap)
+            bounds = [
+                (-high, -low)
+                if profile.THRUSTER_REVERSED[name]
+                else (low, high)
+                for name in self.names
+            ]
+            if np.any(values):
+                values = values * min(1.0, self._maximum_scale(values, bounds))
             return tuple(
-                float(np.clip(value, -1.0, 1.0))
-                * (-1.0 if profile.THRUSTER_REVERSED[name] else 1.0)
+                self.model.force_to_command(
+                    float(value), profile.THRUSTER_REVERSED[name]
+                )
                 for name, value in zip(self.names, values, strict=True)
             )
         pulses = [profile.ESC_PWM_NEUTRAL_US] * len(self.names)

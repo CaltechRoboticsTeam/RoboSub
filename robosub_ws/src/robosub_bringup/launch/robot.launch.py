@@ -128,6 +128,7 @@ def start(context):
         "manual_control": str(teleop != "off").lower(),
         "control_rate": str(rate),
         "output_rate": str(output_rate),
+        "max_power": str(teleop_scale),
     }
     if simulated:
         actions = [

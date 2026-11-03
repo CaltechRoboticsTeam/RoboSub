@@ -10,6 +10,7 @@ setup(
     name=PACKAGE,
     version="0.1.0",
     packages=[PACKAGE],
+    package_data={PACKAGE: ["mac_gamepad.swift"]},
     data_files=[
         ("share/ament_index/resource_index/packages", [f"resource/{PACKAGE}"]),
         (f"share/{PACKAGE}", ["package.xml"]),
@@ -25,6 +26,7 @@ setup(
     entry_points={
         "console_scripts": [
             "driver_station = robosub_bringup.driver_station:main",
+            "mac_gamepad = robosub_bringup.mac_gamepad:main",
         ],
     },
 )

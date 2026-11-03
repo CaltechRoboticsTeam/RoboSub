@@ -139,7 +139,7 @@ class Dashboard(Node):
         R.append('')
         t = self.thrust
         fmt = lambda k: '   -  ' if t[k] is None else f'{t[k]:+6.2f}'
-        unit = 'POWER' if self.profile.ACTUATOR_KIND == 'm5' else 'THRUST N'
+        unit = 'THRUST N'
         labels = ' '.join(
             f'{index}:{name:2}'
             for index, name in enumerate(self.profile.THRUSTER_NAMES)
