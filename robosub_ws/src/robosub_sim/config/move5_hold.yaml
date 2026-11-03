@@ -1,0 +1,30 @@
+# Prepared scenario; launching it starts Gazebo and runs the maneuver.
+mission:
+  ros__parameters:
+    mission: ["dive 1.0", "heading 0", "move 5.0", "hold 10.0"]
+    pos_tol: 0.20
+    depth_tol: 0.10
+    heading_tol: 5.0
+    speed_tol: 0.05
+    settle: 1.0
+    state_timeout: 0.5
+    step_timeout: 60.0
+    max_tilt_deg: 30.0
+    hold_tilt_deg: 10.0
+motion_test:
+  ros__parameters:
+    distance: 5.0
+    depth: 1.0
+    heading_deg: 0.0
+    hold_duration: 10.0
+    position_tolerance: 0.20
+    depth_tolerance: 0.10
+    heading_tolerance_deg: 5.0
+    speed_tolerance: 0.05
+    sample_timeout: 0.25
+    test_timeout: 180.0
+    completion_grace: 1.0
+    clock_timeout: 30.0
+    max_tilt_deg: 30.0
+    hold_tilt_deg: 10.0
+    output_directory: "~/.ros/robosub_tests"

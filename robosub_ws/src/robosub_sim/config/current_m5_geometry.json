@@ -1,0 +1,371 @@
+{
+  "schema_version": 1,
+  "vehicle_profile": "current_m5",
+  "scope": "base_link hull and six motor-body CAD visuals; cosmetic rotating propeller primitives excluded",
+  "body_axes": "x forward, y port, z up; metres; Rz(yaw) Ry(pitch) Rx(roll)",
+  "methods": {
+    "bounds": "min/max of transformed rendered STL vertices",
+    "projection": "orthographic union of rendered triangles sampled at pixel centers; holes and gaps remain open",
+    "inertia": "oriented tetrahedral volume moments of high-resolution CAD parts, normalized to unit total mass, about their centroid; tensor retains body-axis orientation",
+    "fingerprints": "mesh byte hashes and canonical geometry inputs are checked; whole-file source hashes record generation provenance only"
+  },
+  "sources": {
+    "meshes_sha256": {
+      "robosub_ws/src/robosub_sim/meshes/hull_lowpoly.stl": "1f670553e4f9d109037b70faa29bb51027e98d5e6314900bb2d335a31dd6345e",
+      "robosub_ws/src/robosub_sim/meshes/thruster_lowpoly.stl": "71b218279fc015c59e22b75b88fb3ea9370c10c700d8b161e7d7938c534068da",
+      "robosub_ws/src/robosub_sim/meshes/urdf_base_link_assembly.stl": "74d17779bc03a53abcc04ac3069ad5820fd03b5d76edb3d8c9119ed2b8106523",
+      "robosub_ws/src/robosub_sim/meshes/video_ray_thruster.stl": "9542cf5407950742e85006ba8da553d5f0224bfa4209d9037411d51fcc92f081"
+    },
+    "geometry_inputs_sha256": "cc125ab60aae799d323b1b5b3267e4754827c39bd44425f5f68e724875865ce8",
+    "visual_transform_sha256": "a5dcb796d2526851578859ab4f2d61c6bac2a40a4ed1017ffb07a4498c528db7"
+  },
+  "generation_provenance_sha256": {
+    "robosub_ws/src/robosub_sim/worlds/pool.sdf": "fa863c48c30d52f4c84f440826c7a359be383f1bd32534c6dda35a697796367b",
+    "robosub_ws/src/robosub_control/robosub_control/config/current_m5.py": "19445a12896c5aa07811df13a2a12ec3643c7853ba77fc3216b78babd7cb1bcb",
+    "tools/analyze_sim_geometry.py": "615b1ad275669fb1ce54d8fddc1e09d9ea1d6abd002fae2ae8c0136e9e7d3eea"
+  },
+  "assumptions": {
+    "COG_NOT_MEASURED": true,
+    "INERTIA_NOT_MEASURED": true,
+    "MASS_NOT_INFERRED_FROM_MESH": true,
+    "DISPLACEMENT_NOT_INFERRED_FROM_MESH": true,
+    "VISUAL_TRANSFORM_ALIGNMENT_UNVERIFIED": true,
+    "mass_distribution": "uniform density over high-resolution CAD solids; overlapping parts count separately",
+    "centroid": "computed uniform-solid centroid is diagnostic only; use centroidal tensor at assumed runtime CG without a parallel-axis shift",
+    "alignment": "current mount translation shifts horizontal motor visuals outward 58mm per end relative to original CAD; rendered union is preserved, not repaired",
+    "collision": "bounds are a contact envelope, not buoyancy volume or sealed hull volume",
+    "quality": "multipart/nonmanifold CAD is not a certified closed exterior shell; lowpoly hull contains boundary edges",
+    "reference_mass": "22.6796kg is the requested approximate total-mass reference, not a CAD measurement; account for separate propeller-link masses at runtime"
+  },
+  "visuals": [
+    {
+      "name": "hull_mesh",
+      "template_mesh_uri": "file:///ws/src/robosub_sim/meshes/hull_lowpoly.stl",
+      "rendered_mesh": "hull_lowpoly.stl",
+      "analysis_mesh": "urdf_base_link_assembly.stl",
+      "template_pose_xyz_rpy": [
+        -0.81741,
+        1.0789,
+        1.54633,
+        3.14159,
+        0.0,
+        0.0
+      ],
+      "pose_xyz_rpy": [
+        -0.81741,
+        1.0789,
+        1.54633,
+        3.14159,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "thr_3_body",
+      "template_mesh_uri": "file:///ws/src/robosub_sim/meshes/thruster_lowpoly.stl",
+      "rendered_mesh": "thruster_lowpoly.stl",
+      "analysis_mesh": "video_ray_thruster.stl",
+      "template_pose_xyz_rpy": [
+        -0.32818,
+        0.33802,
+        0.13183,
+        -1.5708,
+        -0.0,
+        -2.35619
+      ],
+      "pose_xyz_rpy": [
+        -0.38618,
+        0.28802,
+        0.13183,
+        -1.5708,
+        -0.0,
+        -2.35619
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "thr_2_body",
+      "template_mesh_uri": "file:///ws/src/robosub_sim/meshes/thruster_lowpoly.stl",
+      "rendered_mesh": "thruster_lowpoly.stl",
+      "analysis_mesh": "video_ray_thruster.stl",
+      "template_pose_xyz_rpy": [
+        -0.32818,
+        -0.3239,
+        -0.06517,
+        1.5708,
+        -0.0,
+        2.35619
+      ],
+      "pose_xyz_rpy": [
+        -0.38618,
+        -0.2599,
+        -0.06517,
+        1.5708,
+        -0.0,
+        2.35619
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "thr_1_body",
+      "template_mesh_uri": "file:///ws/src/robosub_sim/meshes/thruster_lowpoly.stl",
+      "rendered_mesh": "thruster_lowpoly.stl",
+      "analysis_mesh": "video_ray_thruster.stl",
+      "template_pose_xyz_rpy": [
+        0.32786,
+        0.33802,
+        -0.06517,
+        1.5708,
+        -0.0,
+        -0.7854
+      ],
+      "pose_xyz_rpy": [
+        0.38586,
+        0.28802,
+        -0.06517,
+        1.5708,
+        -0.0,
+        -0.7854
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "thr_0_body",
+      "template_mesh_uri": "file:///ws/src/robosub_sim/meshes/thruster_lowpoly.stl",
+      "rendered_mesh": "thruster_lowpoly.stl",
+      "analysis_mesh": "video_ray_thruster.stl",
+      "template_pose_xyz_rpy": [
+        0.32786,
+        -0.3239,
+        0.13183,
+        -1.5708,
+        -0.0,
+        0.7854
+      ],
+      "pose_xyz_rpy": [
+        0.38586,
+        -0.2599,
+        0.13183,
+        -1.5708,
+        -0.0,
+        0.7854
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "thr_5_body",
+      "template_mesh_uri": "file:///ws/src/robosub_sim/meshes/thruster_lowpoly.stl",
+      "rendered_mesh": "thruster_lowpoly.stl",
+      "analysis_mesh": "video_ray_thruster.stl",
+      "template_pose_xyz_rpy": [
+        -0.08638,
+        0.36144,
+        0.08004,
+        1.57079,
+        1.57079,
+        0.0
+      ],
+      "pose_xyz_rpy": [
+        -0.08638,
+        0.36844,
+        -0.00096,
+        1.57079,
+        1.57079,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "thr_4_body",
+      "template_mesh_uri": "file:///ws/src/robosub_sim/meshes/thruster_lowpoly.stl",
+      "rendered_mesh": "thruster_lowpoly.stl",
+      "analysis_mesh": "video_ray_thruster.stl",
+      "template_pose_xyz_rpy": [
+        0.11062,
+        -0.34732,
+        0.08004,
+        -1.57079,
+        1.57079,
+        0.0
+      ],
+      "pose_xyz_rpy": [
+        0.11062,
+        -0.34032,
+        -0.00096,
+        -1.57079,
+        1.57079,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "collision": {
+    "bounds_min_m": [
+      -0.4726025281506732,
+      -0.3622665145803765,
+      -0.20009489913819745
+    ],
+    "bounds_max_m": [
+      0.4722828001417992,
+      0.3763761769921873,
+      0.18757117666801792
+    ],
+    "center_m": [
+      -0.00015986400443701587,
+      0.0070548312059053875,
+      -0.006261861235089761
+    ],
+    "size_m": [
+      0.9448853282924724,
+      0.7386426915725638,
+      0.38766607580621537
+    ]
+  },
+  "projected_area": {
+    "raster_pitch_m": 0.001,
+    "method": "pixel_center_triangle_union",
+    "x_m2": 0.150282,
+    "y_m2": 0.160734,
+    "z_m2": 0.317088
+  },
+  "inertia": {
+    "unit_mass_tensor_m2": [
+      [
+        0.03469946690865222,
+        -0.00025514983520753267,
+        0.0006446169072665201
+      ],
+      [
+        -0.00025514983520753267,
+        0.049940977440333365,
+        0.00017524980232954106
+      ],
+      [
+        0.0006446169072665201,
+        0.00017524980232954106,
+        0.07470809196576784
+      ]
+    ],
+    "uniform_solid_centroid_body_m": [
+      -0.0027437794871853116,
+      0.006768312149835932,
+      0.037217872867897926
+    ],
+    "signed_material_volume_m3_NOT_DISPLACEMENT": 0.010291019192426202,
+    "reference": "uniform_CAD_solid_centroid_recentered_at_assumed_body_origin",
+    "assumed_runtime_cg_body_m": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "reference_mass_kg": 22.6796,
+    "reference_mass_tensor_kg_m2": [
+      [
+        0.7869700297014689,
+        -0.005786696202572758,
+        0.01461965361004177
+      ],
+      [
+        -0.005786696202572758,
+        1.1326413919557845,
+        0.00397459541691306
+      ],
+      [
+        0.01461965361004177,
+        0.00397459541691306,
+        1.6943496425468285
+      ]
+    ]
+  },
+  "quality": {
+    "hull_lowpoly.stl": {
+      "triangles": 46735,
+      "weld_tolerance_m": 1e-06,
+      "welded_vertices": 19748,
+      "components_after_weld": 2,
+      "boundary_edges": 681,
+      "nonmanifold_edges": 4966,
+      "degenerate_triangles_area_below_1e_12_m2": 0,
+      "surface_area_m2": 2.6949942425139195,
+      "closure_area_vector_m2": [
+        9.815626982145886e-05,
+        8.465501882604087e-05,
+        -0.002438718599026224
+      ]
+    },
+    "thruster_lowpoly.stl": {
+      "triangles": 7641,
+      "weld_tolerance_m": 1e-06,
+      "welded_vertices": 3795,
+      "components_after_weld": 1,
+      "boundary_edges": 52,
+      "nonmanifold_edges": 90,
+      "degenerate_triangles_area_below_1e_12_m2": 1,
+      "surface_area_m2": 0.05525346199556085,
+      "closure_area_vector_m2": [
+        1.089187546612913e-06,
+        -2.5686060175576352e-06,
+        -2.358025481961944e-05
+      ]
+    },
+    "urdf_base_link_assembly.stl": {
+      "triangles": 262204,
+      "weld_tolerance_m": 1e-06,
+      "welded_vertices": 128835,
+      "components_after_weld": 161,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 2145,
+      "degenerate_triangles_area_below_1e_12_m2": 0,
+      "surface_area_m2": 2.7522864994516185,
+      "closure_area_vector_m2": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "video_ray_thruster.stl": {
+      "triangles": 86872,
+      "weld_tolerance_m": 1e-06,
+      "welded_vertices": 43379,
+      "components_after_weld": 1,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 98,
+      "degenerate_triangles_area_below_1e_12_m2": 34,
+      "surface_area_m2": 0.05601497742838851,
+      "closure_area_vector_m2": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  }
+}

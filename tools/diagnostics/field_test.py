@@ -1,9 +1,4 @@
-"""Current-submarine diagnostics and an explicitly executed bounded pulse.
-
-Default operation only subscribes and reads cached ROS parameters. Physical
-output publishers and an arming client are created only after --execute and
-successful preflight. No serial ports, firmware or calibration are modified.
-"""
+"""Run an explicitly enabled, bounded PX4 diagnostic pulse."""
 
 import argparse
 import json

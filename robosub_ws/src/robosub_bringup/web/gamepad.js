@@ -13,6 +13,7 @@
     return;
   }
   if (settings.source === "off") return;
+  document.querySelector("#gamepad-disabled").hidden = true;
   panel.hidden = false;
   const local = settings.source === "local";
   const mode = settings.simulation ? "Simulation" :
@@ -29,6 +30,7 @@
       const motors = data.preview ? numbers(data.preview) : "waiting / stale";
       preview.textContent = [
         `Movement enabled: ${data.enabled === true ? "yes" : "no"}`,
+        `Assistance: ${data.maneuver || "waiting / stale"}`,
         `Body effort [forward, left, up, roll right, turn left]: ${command}`,
         `${data.preview_names.map((name, i) =>
           `${data.preview_ids[i]}:${name}`).join("  ")} ` +
@@ -111,6 +113,7 @@
     if ((!enabled && !disablePending) || busy) return;
     const requestedEnabled = enabled;
     let axes = [0, 0, 0, 0, 0, 0];
+    let buttons = [0, 0, 0, 0];
     let inputStatus = "Input enabled on the Linux controller.";
     if (enabled && !local) {
       const pad = navigator.getGamepads()[Number(select.value)];
@@ -118,6 +121,7 @@
           pad.mapping === "standard") {
         axes = [...pad.axes.slice(0, 4),
           pad.buttons[6].value, pad.buttons[7].value];
+        buttons = pad.buttons.slice(0, 4).map(button => button.pressed ? 1 : 0);
         inputStatus = `${pad.id}\nSticks + LT/RT: ` +
           axes.map(value => value.toFixed(3)).join("  ");
       } else {
@@ -132,9 +136,9 @@
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Tuning-Token": token,
+          "X-Driver-Station-Token": token,
         },
-        body: JSON.stringify({session, sequence: sequence++, axes,
+        body: JSON.stringify({session, sequence: sequence++, axes, buttons,
           enabled: requestedEnabled}),
         signal: pending.signal,
       });

@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<sdf version="1.11">
+  <model name="woollett_pool">
+    <static>true</static>
+    <link name="link">
+
+      <!-- Visual: single GLB (built by build_woollett_glb.py via Blender) -->
+      <visual name="pool">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh><uri>model://woollett_pool/meshes/woollett_pool.glb</uri></mesh>
+        </geometry>
+      </visual>
+
+      <!-- Collisions: cheap primitive boxes (floor + 4 walls) -->
+
+      <collision name="floor_c">
+        <pose>0.0000 0.0000 -2.1836 0 0 0</pose>
+        <geometry><box><size>50.0000 22.8600 0.1000</size></box></geometry>
+      </collision>
+
+      <collision name="wall_xpos_c">
+        <pose>25.1000 0.0000 -1.0668 0 0 0</pose>
+        <geometry><box><size>0.2000 23.2600 2.1336</size></box></geometry>
+      </collision>
+
+      <collision name="wall_xneg_c">
+        <pose>-25.1000 0.0000 -1.0668 0 0 0</pose>
+        <geometry><box><size>0.2000 23.2600 2.1336</size></box></geometry>
+      </collision>
+
+      <collision name="wall_ypos_c">
+        <pose>0.0000 11.5300 -1.0668 0 0 0</pose>
+        <geometry><box><size>50.0000 0.2000 2.1336</size></box></geometry>
+      </collision>
+
+      <collision name="wall_yneg_c">
+        <pose>0.0000 -11.5300 -1.0668 0 0 0</pose>
+        <geometry><box><size>50.0000 0.2000 2.1336</size></box></geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

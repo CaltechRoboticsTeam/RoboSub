@@ -1,9 +1,4 @@
-"""T200 / Basic ESC R3 static thrust model; no hardware access.
-
-Voltage interpolation uses Blue Robotics' 2019 bollard-thrust measurements.
-Small measurement reversals are replaced by cumulative maxima to make thrust
-and current monotone on each side of neutral. No voltage extrapolation occurs.
-"""
+"""Interpolate measured T200 thrust and current curves."""
 
 from bisect import bisect_left
 from functools import lru_cache

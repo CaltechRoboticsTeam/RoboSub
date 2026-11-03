@@ -6,6 +6,17 @@ from numbers import Real
 from robosub_control.config import constants
 
 ZERO = (0.0, 0.0, 0.0, 0.0, 0.0)
+NO_BUTTONS = (0, 0, 0, 0)
+
+
+def validate_buttons(buttons):
+    """Validate the standard A, B, X, Y button order."""
+    values = tuple(buttons)
+    if len(values) != 4 or any(
+        type(value) is not int or value not in (0, 1) for value in values
+    ):
+        raise ValueError("Expected A, B, X, Y as four 0/1 values")
+    return values
 
 
 def validate_axes(axes):
@@ -51,6 +62,7 @@ class GamepadControl:
     def clear_input(self):
         self.last_rx = None
         self.command = ZERO
+        self.buttons = NO_BUTTONS
 
     def stop(self):
         self.enabled = False
@@ -71,18 +83,24 @@ class GamepadControl:
                 values[4:] = [-value for value in values[4:]]
             values = validate_axes(values)
             if self.source == "browser":
-                if len(buttons) != 1 or type(buttons[0]) is not int:
+                if len(buttons) not in (1, 5) or type(buttons[0]) is not int:
                     raise ValueError("Missing operator enabled state")
                 if buttons[0] not in (0, 1):
                     raise ValueError("Operator enabled state must be 0 or 1")
                 self.set_enabled(bool(buttons[0]))
+                faces = buttons[1:] if len(buttons) == 5 else NO_BUTTONS
+            else:
+                faces = buttons[:4] if len(buttons) >= 4 else NO_BUTTONS
+            faces = validate_buttons(faces)
         except (ValueError, TypeError, OverflowError):
             self.clear_input()
             raise ValueError("Invalid gamepad input") from None
         self.last_rx = now
         if not self.enabled:
             self.command = ZERO
+            self.buttons = NO_BUTTONS
             return
+        self.buttons = faces
 
         def axis(value):
             magnitude = max(0.0, abs(value) - self.deadzone)

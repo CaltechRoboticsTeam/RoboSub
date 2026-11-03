@@ -1,40 +1,23 @@
 #!/usr/bin/env python3
-"""Hold depth, heading, roll and horizontal position using /sub/state.
+"""PID depth, heading, roll and profiled position control."""
 
-Inputs are /sub/setpoint/depth (+down metres), heading/roll (right-hand ROS
-radians), position (world x/y metres), move (forward metres), roll_turns,
-and optional /sub/cmd_vel_manual surge/sway efforts. Setpoints persist.
-Startup manual_control=True disables all automatic command publication;
-the Xbox program then owns /sub/cmd_vel without depending on state input.
-
-periodic() runs at the configured calculation rate. The Twist published on
-/sub/cmd_vel carries normalized body efforts, not velocity setpoints. The
-geometry allocator uses normalized M5 power, or T200 force/torque limits
-at the configured reference voltage, according to the vehicle profile.
-
-The controller starts idle. Missing/stale state stops command publication;
-the mixer and command stage each have a separate command timeout. Position
-hold additionally requires a fresh DVL estimate. Nonzero manual surge/sway
-cancels position hold. The layout has no independent pitch authority.
-
-During multi-turn rolls, an unwrapped target is ramped at roll_spin_rate.
-Depth and yaw efforts are scaled by cos(roll), and depth integration pauses
-when well off level. Gains/feedforward remain tuning defaults, not measured
-physical vehicle dynamics. Recheck them after geometry/voltage changes.
-"""
-
+import json
 import math
 
 from geometry_msgs.msg import Point, Twist
 from nav_msgs.msg import Odometry
 import rclpy
-from rclpy.node import Node
-from std_msgs.msg import Float64
+from std_msgs.msg import Empty, Float64, String
 
+from robosub_control.autonomy.motion_profile import MotionProfile
+from robosub_control.autonomy.sensor_freshness import (
+    SensorFreshness,
+    stamp_to_sec,
+)
+from robosub_control.autonomy.state_estimator import q_to_rpy, rotate
 from robosub_control.config import constants
-from robosub_control.autonomy.state_estimator import q_to_rpy
-from robosub_control.utils.tuning import TunableNumbers, fixed_parameter
 from robosub_control.config.vehicle_profiles import profile_from_node
+from robosub_control.utils.tuning import TunableNode, fixed_parameter
 
 
 def clamp(v, lo, hi):
@@ -54,6 +37,7 @@ class PID:
         self.kp, self.ki, self.kd = kp, ki, kd
         self.i_limit, self.out_limit = i_limit, out_limit
         self.integral = 0.0
+        self.terms = {}
 
     def step(self, error, rate, dt, integrate=True):
         if integrate:
@@ -61,17 +45,34 @@ class PID:
                 self.integral + error * dt, -self.i_limit, self.i_limit
             )
         u = self.kp * error + self.ki * self.integral - self.kd * rate
-        return clamp(u, -self.out_limit, self.out_limit)
+        output = clamp(u, -self.out_limit, self.out_limit)
+        self.terms = {
+            "error": error,
+            "measured_rate": rate,
+            "p": self.kp * error,
+            "i": self.ki * self.integral,
+            "d": -self.kd * rate,
+            "unsaturated": u,
+            "output": output,
+            "saturated": bool(output != u),
+            "integrating": integrate,
+            "kp": self.kp,
+            "ki": self.ki,
+            "kd": self.kd,
+        }
+        return output
 
     def reset(self):
         self.integral = 0.0
+        self.terms = {}
 
 
-class DepthHeadingController(Node):
+class DepthHeadingController(TunableNode):
     def __init__(self):
         super().__init__("depth_heading_controller")
         profile = profile_from_node(self)
         self.manual_control = fixed_parameter(self, "manual_control", False)
+        self.command_limit = 1.0
         self.rate = float(
             fixed_parameter(self, "rate", constants.CONTROLLER_DEFAULTS["rate"])
         )
@@ -107,9 +108,35 @@ class DepthHeadingController(Node):
         )
         if not math.isfinite(self.state_timeout) or self.state_timeout <= 0:
             raise ValueError("state_timeout must be finite and positive")
-        self.tuning = TunableNumbers(self)
+        self.state_freshness = SensorFreshness(self.state_timeout)
+        self.max_tilt_deg = float(
+            fixed_parameter(
+                self,
+                "max_tilt_deg",
+                constants.CONTROLLER_DEFAULTS["max_tilt_deg"],
+            )
+        )
+        if (
+            not math.isfinite(self.max_tilt_deg)
+            or not 0 < self.max_tilt_deg < 60
+        ):
+            raise ValueError("max_tilt_deg must be between 0 and 60")
+        for name in ("pos_max_speed", "pos_max_acceleration"):
+            value = float(
+                fixed_parameter(self, name, constants.CONTROLLER_DEFAULTS[name])
+            )
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f"{name} must be finite and positive")
+            setattr(self, name, value)
         for name, default in constants.CONTROLLER_DEFAULTS.items():
-            if name in ("rate", "output_rate", "state_timeout"):
+            if name in (
+                "rate",
+                "output_rate",
+                "state_timeout",
+                "pos_max_speed",
+                "pos_max_acceleration",
+                "max_tilt_deg",
+            ):
                 continue
             self.tuning.number(
                 name,
@@ -155,6 +182,8 @@ class DepthHeadingController(Node):
         self.depth_sp = None
         self.heading_sp = None
         self.pos_sp = None  # (x, y) or None
+        self.motion = None
+        self.position_needs_replan = True
         self.roll_sp = None
         self.prev_roll = None
         self.roll_unwrapped = 0.0  # continuous roll angle, for multi-turn moves
@@ -166,6 +195,17 @@ class DepthHeadingController(Node):
         self.manual_rx = None
 
         self.pub = self.create_publisher(Twist, "/sub/cmd_vel", 10)
+        self.status_pub = self.create_publisher(
+            String, "/sub/control/status", 10
+        )
+        self.fault_pub = self.create_publisher(String, "/sub/control/fault", 10)
+        self.reference_pub = self.create_publisher(
+            Odometry, "/sub/reference", 10
+        )
+        self.target_pubs = {
+            name: self.create_publisher(Float64, f"/sub/reference/{name}", 10)
+            for name in ("depth", "heading", "roll")
+        }
         self.create_subscription(Odometry, "/sub/state", self.on_state, 10)
         self.create_subscription(
             Float64, "/sub/setpoint/depth", self.on_depth_sp, 10
@@ -188,12 +228,15 @@ class DepthHeadingController(Node):
         self.create_subscription(
             Twist, "/sub/cmd_vel_manual", self.on_manual, 10
         )
+        self.create_subscription(
+            Empty, "/sub/setpoint/cancel", self.on_cancel, 10
+        )
         self.control_timer = self.create_timer(1.0 / self.rate, self.periodic)
 
         self.get_logger().info(
             "depth_heading_controller: Xbox owns commands; hold loops disabled"
             if self.manual_control
-            else "depth_heading_controller up, IDLE until a setpoint arrives on "
+            else "depth_heading_controller up, IDLE until a setpoint on "
             "/sub/setpoint/depth or /sub/setpoint/heading"
         )
 
@@ -201,27 +244,64 @@ class DepthHeadingController(Node):
         return self.get_clock().now().nanoseconds * 1e-9
 
     def on_state(self, msg):
+        now = self.now()
+        position = msg.pose.pose.position
+        q = msg.pose.pose.orientation
+        linear, angular = msg.twist.twist.linear, msg.twist.twist.angular
+        values = (
+            position.x,
+            position.y,
+            position.z,
+            q.w,
+            q.x,
+            q.y,
+            q.z,
+            linear.x,
+            linear.y,
+            linear.z,
+            angular.x,
+            angular.y,
+            angular.z,
+            msg.pose.covariance[0],
+        )
+        if abs(math.hypot(q.w, q.x, q.y, q.z) - 1.0) > 0.01:
+            return
+        was_fresh = self.state_freshness.fresh(now)
+        if not self.state_freshness.accept(
+            stamp_to_sec(msg.header.stamp), now, values
+        ):
+            return
+        if not was_fresh or msg.pose.covariance[0] < 0.0:
+            self.position_needs_replan = True
         self.state = msg
-        self.state_rx = self.now()
+        self.state_rx = now
 
     def on_depth_sp(self, msg):
+        if not math.isfinite(msg.data):
+            return
         if self.depth_sp is None:
             self.get_logger().info("depth loop armed")
         self.depth_sp = msg.data
 
     def on_heading_sp(self, msg):
+        if not math.isfinite(msg.data):
+            return
         if self.heading_sp is None:
             self.get_logger().info("heading loop armed")
         self.heading_sp = msg.data
 
     def on_roll_sp(self, msg):
+        if not math.isfinite(msg.data):
+            return
         if self.roll_sp is None:
             self.get_logger().info("roll loop armed")
         self.roll_sp = msg.data
         self.spin_end = None  # a plain setpoint cancels a spin
 
     def on_roll_turns(self, msg):
-        if self.state is None or self.prev_roll is None:
+        if not math.isfinite(msg.data):
+            return
+        if not self.state_freshness.fresh(self.now()) or self.prev_roll is None:
             self.get_logger().warn("roll_turns ignored: no /sub/state yet")
             return
         if self.roll_sp is None:
@@ -235,14 +315,29 @@ class DepthHeadingController(Node):
         )
 
     def on_pos_sp(self, msg):
+        if not all(math.isfinite(value) for value in (msg.x, msg.y)):
+            return
+        if self.pos_sp == (msg.x, msg.y):
+            return
         if self.pos_sp is None:
             self.get_logger().info("position loop armed")
         self.pos_sp = (msg.x, msg.y)
+        if self.motion is not None and not self.position_needs_replan:
+            self.motion.retarget(
+                self.pos_sp, self.pos_max_speed, self.pos_max_acceleration
+            )
+        else:
+            self.position_needs_replan = True
         self.get_logger().info(f"go to ({msg.x:.2f}, {msg.y:.2f})")
 
     def on_move(self, msg):
         """Forward `data` metres along the heading setpoint (or current yaw)."""
-        if self.state is None:
+        if not math.isfinite(msg.data):
+            return
+        if (
+            not self.state_freshness.fresh(self.now())
+            or self.state.pose.covariance[0] < 0.0
+        ):
             self.get_logger().warn("move ignored: no /sub/state yet")
             return
         q = self.state.pose.pose.orientation
@@ -256,6 +351,10 @@ class DepthHeadingController(Node):
         self.on_pos_sp(target)
 
     def on_manual(self, msg):
+        if not all(
+            math.isfinite(value) for value in (msg.linear.x, msg.linear.y)
+        ):
+            return
         self.manual = msg
         self.manual_rx = self.now()
         if self.pos_sp is not None and (
@@ -265,6 +364,66 @@ class DepthHeadingController(Node):
                 "manual surge/sway received: position mode cancelled"
             )
             self.pos_sp = None
+            self.motion = None
+            self.position_needs_replan = True
+
+    def reset_pids(self):
+        for pid in (
+            self.depth_pid,
+            self.heading_pid,
+            self.roll_pid,
+            self.surge_pid,
+            self.sway_pid,
+        ):
+            pid.reset()
+
+    def on_cancel(self, _msg):
+        """Clear automatic targets while preserving operator enable state."""
+        self.depth_sp = self.heading_sp = self.roll_sp = self.pos_sp = None
+        self.spin_sp = self.spin_end = self.prev_roll = None
+        self.roll_unwrapped = 0.0
+        self.motion = None
+        self.position_needs_replan = True
+        self.manual = Twist()
+        self.manual_rx = None
+        self.next_output_time = None
+        self.reset_pids()
+        if not self.manual_control:
+            self.pub.publish(Twist())
+
+    def position_reference(self, dt):
+        """Reacquire measured motion after an interruption, then advance."""
+        if self.position_needs_replan or self.motion is None:
+            p, q = (
+                self.state.pose.pose.position,
+                self.state.pose.pose.orientation,
+            )
+            v = self.state.twist.twist.linear
+            world_velocity = rotate((q.w, q.x, q.y, q.z), (v.x, v.y, v.z))
+            self.motion = MotionProfile((p.x, p.y), world_velocity[:2])
+            self.motion.retarget(
+                self.pos_sp, self.pos_max_speed, self.pos_max_acceleration
+            )
+            self.position_needs_replan = False
+            self.surge_pid.reset()
+            self.sway_pid.reset()
+            dt = 0.0
+        reference = self.motion.advance(dt)
+        message = Odometry()
+        message.header.stamp = self.get_clock().now().to_msg()
+        message.header.frame_id = self.state.header.frame_id
+        # Reference velocities, like reference positions, use the world frame.
+        message.child_frame_id = message.header.frame_id
+        message.pose.pose.position.x, message.pose.pose.position.y = (
+            reference.position
+        )
+        message.pose.pose.position.z = self.state.pose.pose.position.z
+        message.pose.pose.orientation.w = 1.0
+        message.twist.twist.linear.x, message.twist.twist.linear.y = (
+            reference.velocity
+        )
+        self.reference_pub.publish(message)
+        return reference
 
     def periodic(self):
         """Run the active hold loops on each controller timer tick."""
@@ -276,14 +435,9 @@ class DepthHeadingController(Node):
         dt = 1.0 / self.rate if previous is None else now - previous
         if dt <= 0.0 or dt > self.state_timeout:
             self.next_output_time = None
-            for pid in (
-                self.depth_pid,
-                self.heading_pid,
-                self.roll_pid,
-                self.surge_pid,
-                self.sway_pid,
-            ):
-                pid.reset()
+            self.position_needs_replan = True
+            self.reset_pids()
+            self.pub.publish(Twist())
             return
         if (
             self.depth_sp is None
@@ -292,16 +446,13 @@ class DepthHeadingController(Node):
             and self.roll_sp is None
         ):
             return  # idle: leave /sub/cmd_vel alone
-        if (
-            self.state is None
-            or self.now() - self.state_rx > self.state_timeout
-        ):
+        if self.state is None or not self.state_freshness.fresh(now):
             self.get_logger().warn(
                 "no fresh /sub/state; not commanding", throttle_duration_sec=2.0
             )
-            self.depth_pid.reset()
-            self.heading_pid.reset()
-            self.roll_pid.reset()
+            self.position_needs_replan = True
+            self.reset_pids()
+            self.pub.publish(Twist())
             return
 
         cmd = Twist()
@@ -309,15 +460,48 @@ class DepthHeadingController(Node):
         depth = -self.state.pose.pose.position.z
         heave_up = self.state.twist.twist.linear.z
         q = self.state.pose.pose.orientation
-        roll, _, yaw = q_to_rpy((q.w, q.x, q.y, q.z))
-        yaw_rate = self.state.twist.twist.angular.z
-        roll_rate = self.state.twist.twist.angular.x
+        quaternion = (q.w, q.x, q.y, q.z)
+        roll, pitch, yaw = q_to_rpy(quaternion)
+        level_command = self.spin_end is None and (
+            self.roll_sp is None or abs(wrap_pi(self.roll_sp)) < 1e-6
+        )
+        if abs(math.degrees(pitch)) > self.max_tilt_deg or (
+            level_command and abs(math.degrees(roll)) > self.max_tilt_deg
+        ):
+            reason = (
+                f"Attitude limit at t={now:.3f}s: "
+                f"roll={math.degrees(roll):+.1f} deg, "
+                f"pitch={math.degrees(pitch):+.1f} deg; "
+                f"limit={self.max_tilt_deg:.1f} deg"
+            )
+            self.fault_pub.publish(
+                String(
+                    data=json.dumps(
+                        {
+                            "stamp": now,
+                            "reason": reason,
+                            "roll_deg": math.degrees(roll),
+                            "pitch_deg": math.degrees(pitch),
+                        }
+                    )
+                )
+            )
+            self.get_logger().error(reason)
+            self.on_cancel(Empty())
+            return
+        rates = self.state.twist.twist.angular
+        yaw_rate = (
+            math.sin(roll) * rates.y + math.cos(roll) * rates.z
+        ) / math.cos(pitch)
+        roll_rate = rates.x + math.tan(pitch) * (
+            math.sin(roll) * rates.y + math.cos(roll) * rates.z
+        )
 
         # Keep a continuous roll angle so a 360 is not a no-op.
         if self.prev_roll is not None:
             self.roll_unwrapped += wrap_pi(roll - self.prev_roll)
         self.prev_roll = roll
-        upright = math.cos(roll)  # +1 level, 0 on its side, -1 inverted
+        upright = math.cos(roll) * math.cos(pitch)
 
         if self.spin_end is not None:
             # Ramp the unwrapped setpoint toward spin_end at spin_rate.
@@ -340,24 +524,30 @@ class DepthHeadingController(Node):
         elif self.roll_sp is not None:
             err = wrap_pi(self.roll_sp - roll)
             u = self.roll_pid.step(err, roll_rate, dt)
-            cmd.angular.x = clamp(u + self.roll_ff * math.sin(roll), -1.0, 1.0)
+            cmd.angular.x = clamp(
+                u + self.roll_ff * math.sin(self.roll_sp), -1.0, 1.0
+            )
 
         if self.pos_sp is not None:
             if self.state.pose.covariance[0] < 0.0:
+                self.position_needs_replan = True
+                self.surge_pid.reset()
+                self.sway_pid.reset()
                 self.get_logger().warn(
                     "position mode but no DVL: holding still",
                     throttle_duration_sec=2.0,
                 )
             else:
-                ex = self.pos_sp[0] - self.state.pose.pose.position.x
-                ey = self.pos_sp[1] - self.state.pose.pose.position.y
-                c, s_ = math.cos(yaw), math.sin(yaw)
-                ex_b = c * ex + s_ * ey  # error in the body frame
-                ey_b = -s_ * ex + c * ey
+                reference = self.position_reference(dt)
+                ex = reference.position[0] - self.state.pose.pose.position.x
+                ey = reference.position[1] - self.state.pose.pose.position.y
+                inverse = (q.w, -q.x, -q.y, -q.z)
+                ex_b, ey_b, _ = rotate(inverse, (ex, ey, 0.0))
                 vx_b = self.state.twist.twist.linear.x
                 vy_b = self.state.twist.twist.linear.y
-                cmd.linear.x = self.surge_pid.step(ex_b, vx_b, dt)
-                cmd.linear.y = self.sway_pid.step(ey_b, vy_b, dt)
+                vx_ref, vy_ref, _ = rotate(inverse, (*reference.velocity, 0.0))
+                cmd.linear.x = self.surge_pid.step(ex_b, vx_b - vx_ref, dt)
+                cmd.linear.y = self.sway_pid.step(ey_b, vy_b - vy_ref, dt)
         elif (
             self.manual_rx is not None
             and self.now() - self.manual_rx < constants.MANUAL_COMMAND_TIMEOUT_S
@@ -369,11 +559,15 @@ class DepthHeadingController(Node):
         if self.depth_sp is not None:
             err_down = self.depth_sp - depth  # +: too shallow
             u_down = self.depth_pid.step(
-                err_down, -heave_up, dt, integrate=abs(upright) > 0.7
+                err_down, -heave_up, dt, integrate=abs(upright) > 0.5
             )
-            # Body "up" is only  cos(roll)  of world up: scale so an inverted
-            # sub pushes the right way and one on its side does not fight.
-            cmd.linear.z = -u_down * upright  # mixer heave is +up
+            # Compensate the vertical projection inside the operating range.
+            # During a deliberate roll, suppress heave near horizontal.
+            cmd.linear.z = (
+                clamp(-u_down / upright, -1.0, 1.0)
+                if abs(upright) > 0.5
+                else 0.0
+            )
 
         if self.heading_sp is not None:
             err = wrap_pi(self.heading_sp - yaw)
@@ -384,7 +578,52 @@ class DepthHeadingController(Node):
             or self.next_output_time is None
             or now >= self.next_output_time
         ):
+            for axis in (cmd.linear, cmd.angular):
+                axis.x = clamp(axis.x, -self.command_limit, self.command_limit)
+                axis.y = clamp(axis.y, -self.command_limit, self.command_limit)
+                axis.z = clamp(axis.z, -self.command_limit, self.command_limit)
             self.pub.publish(cmd)
+            for name, publisher in self.target_pubs.items():
+                target = getattr(self, f"{name}_sp")
+                if target is not None:
+                    publisher.publish(Float64(data=target))
+            self.status_pub.publish(
+                String(
+                    data=json.dumps(
+                        {
+                            "stamp": now,
+                            "rpy_deg": [
+                                math.degrees(v) for v in (roll, pitch, yaw)
+                            ],
+                            "body_z_vertical_projection": upright,
+                            "depth_target_m": self.depth_sp,
+                            "heading_target_rad": self.heading_sp,
+                            "roll_target_rad": self.roll_sp,
+                            "position_target_m": self.pos_sp,
+                            "dvl_valid": bool(
+                                self.state.pose.covariance[0] >= 0
+                            ),
+                            "settings": {
+                                "rate_hz": self.rate,
+                                "max_speed_m_s": self.pos_max_speed,
+                                "max_accel_m_s2": self.pos_max_acceleration,
+                                "max_tilt_deg": self.max_tilt_deg,
+                            },
+                            "pid": {
+                                name: pid.terms
+                                for name, pid in (
+                                    ("depth", self.depth_pid),
+                                    ("heading", self.heading_pid),
+                                    ("roll", self.roll_pid),
+                                    ("surge", self.surge_pid),
+                                    ("sway", self.sway_pid),
+                                )
+                            },
+                        },
+                        allow_nan=False,
+                    )
+                )
+            )
             period = 1.0 / self.output_rate
             if self.next_output_time is None or self.output_rate == self.rate:
                 self.next_output_time = now + period

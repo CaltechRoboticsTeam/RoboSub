@@ -1,15 +1,14 @@
-"""Current VideoRay M5 vehicle; live USB transport is explicitly selected.
-
-The user confirmed these mounts and the legacy MAVLink receiver firmware.
-Polarity, supply voltage and power-to-force calibration
-still require verification on this vehicle.
-"""
+"""Current M5 vehicle geometry, motor IDs and output limits."""
 
 import math
 
 from robosub_control.config.thruster_layout import (
     THRUSTER_NAMES as THRUSTER_NAMES,
+)
+from robosub_control.config.thruster_layout import (
     THRUSTER_TOPIC_IDS as THRUSTER_TOPIC_IDS,
+)
+from robosub_control.config.thruster_layout import (
     THRUSTERS as THRUSTERS,
 )
 
@@ -86,6 +85,7 @@ THRUSTER_DIRECTIONS_CONFIRMED = False
 # Motor IDs select array slots; reply node ID is a separate protocol field.
 M5_MOTOR_IDS = {"FR": 0, "FL": 1, "BR": 2, "BL": 3, "RD": 4, "LD": 6}
 M5_REPLY_NODE_ID = None
+# The user corrected the initial 24 V report to a possible 48 V supply.
 M5_SUPPLY_VOLTAGE_V = None
 M5_POWER_TO_FORCE_CALIBRATION = None
 M5_PROPELLER_DIAMETER_M = 0.090
@@ -100,8 +100,6 @@ PREVIEW_TOPIC = "/sub/m5/power_preview"
 SENT_TOPIC = "/sub/m5/power_sent"
 NEUTRAL_COMMAND = 0.0
 INITIAL_NEUTRAL_S = 0.0
-# Uncalibrated simulation proxy only. Real commands remain power fractions.
-SIM_FULL_POWER_FORCE_N = 60.0
 
 # Axis scaling assumes equal motor authority in normalized power space.
 # Combined commands are scaled together if a thruster would saturate.

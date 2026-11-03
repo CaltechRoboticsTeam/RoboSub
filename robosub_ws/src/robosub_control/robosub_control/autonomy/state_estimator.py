@@ -1,90 +1,25 @@
 #!/usr/bin/env python3
-"""Fuse the IMU and the depth sensor into one state estimate on /sub/state.
+"""Estimate /sub/state from IMU, positive-down depth and DVL velocity.
 
-WHY THIS NODE EXISTS. Controllers should never read sensors directly: a
-depth PID that subscribes to /depth and a heading PID that subscribes to
-/imu/data_raw each end up with their own filtering, their own sign
-conventions and their own bugs. This node is the single place that turns
-raw sensors into "where is the sub and how is it moving". Everything above
-it consumes /sub/state and nothing else.
-
-It consumes ONLY the topics the real vehicle will have:
-
-    /imu/data_raw   sensor_msgs/Imu   body rates + specific force, 100 Hz
-    /depth          std_msgs/Float64  metres below surface, +down, 50 Hz
-    /dvl/velocity   geometry_msgs/TwistWithCovarianceStamped
-                                      velocity over ground, DVL frame, ~7 Hz
-
-The Imu message's `orientation` field is deliberately IGNORED. Gazebo fills
-it with ground truth; a raw IMU driver on the vehicle may not fill it at
-all. Attitude is computed here from rates + accelerometer so the node
-behaves the same on both.
-
-WHAT IT PUBLISHES
-
-    /sub/state      nav_msgs/Odometry
-        pose.position.x/y    metres from where this node started, in the
-                             frame whose x axis is the sub's heading at
-                             start (yaw 0). Integrated DVL velocity.
-        pose.position.z      world z, metres, surface = 0 (so z = -depth)
-        pose.orientation     body -> world quaternion
-        pose.covariance[0]   -1.0 while the DVL is silent (no bottom lock):
-                             x/y are frozen and must not be trusted
-        twist.linear.x/y     body-frame velocity from the DVL (m/s), 0 if stale
-        twist.angular        bias-corrected body rates (rad/s)
-        twist.linear.z       heave rate, +up (m/s)
-    /sub/state/rpy  geometry_msgs/Vector3Stamped   roll, pitch, yaw in rad,
-                    for humans: `ros2 topic echo /sub/state/rpy`
-
-FRAMES. Body is x forward, y port, z up (same as thruster_mixer). Yaw is
-positive counter-clockwise seen from above. Yaw is RELATIVE: it starts at
-0 wherever the sub points when this node starts, because a gyro can only
-integrate change. Without a magnetometer or DVL that is all an IMU knows.
-
-HOW THE ATTITUDE FILTER WORKS (Mahony complementary filter)
-
-    1. Integrate the gyro: q <- q + 0.5 * q (x) omega * dt.  Fast and
-       accurate short-term, but every bias and every bit of noise
-       accumulates, so roll/pitch drift within minutes.
-    2. The accelerometer at rest measures the reaction to gravity, which
-       points "up" in the body frame. Predict where "up" should be from the
-       current q, compare with the measurement, and nudge the gyro rate by
-       kp * (measured x predicted). This slowly pulls roll and pitch back
-       to gravity. ki integrates the same error into a gyro bias estimate.
-    3. Yaw gets no correction (gravity says nothing about heading), so it
-       integrates the z gyro. In sim the bias is ~1e-5 rad/s: negligible.
-
-    kp sets how much you trust the accelerometer. Too high and thruster
-    surges show up as fake tilt; too low and roll/pitch drift. 1-3 is the
-    usual range for a slow vehicle.
-
-HOW POSITION WORKS. The DVL measures velocity at ITS location, so while
-the sub turns it also sees omega x r (r = DVL offset from the centre of
-rotation). Remove that, rotate the body velocity into the world frame with
-the current attitude, integrate. Drift is ~0.2-1 % of distance travelled
-plus whatever yaw error you have, which is why yaw matters so much.
-
-Parameters
-    dvl_offset     DVL position in body frame, m          (from vehicle profile)
-    dvl_timeout    s without a DVL ping -> velocity = 0   (default 1.0)
-    kp             accelerometer correction gain          (default 2.0)
-    ki             gyro bias learning gain                (default 0.02)
-    depth_tau      depth low-pass time constant, s        (default 0.08)
-    heave_tau      heave-rate low-pass time constant, s   (default 0.25)
-"""
+Attitude uses a Mahony filter; XY integrates corrected body velocity.
+Incoming IMU orientation is ignored; yaw starts at zero.
+dvl_offset is the velocity origin: DVL in sim, Pixhawk in real mode."""
 
 import math
 
 from geometry_msgs.msg import TwistWithCovarianceStamped, Vector3Stamped
 from nav_msgs.msg import Odometry
 import rclpy
-from rclpy.node import Node
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float64
 
+from robosub_control.autonomy.sensor_freshness import (
+    SensorFreshness,
+    stamp_to_sec,
+)
 from robosub_control.config import constants
-from robosub_control.utils.tuning import TunableNumbers, fixed_parameter
 from robosub_control.config.vehicle_profiles import profile_from_node
+from robosub_control.utils.tuning import TunableNode, fixed_parameter
 
 G = 9.81
 
@@ -140,13 +75,9 @@ def q_to_rpy(q):
     return roll, pitch, yaw
 
 
-def stamp_to_sec(stamp):
-    return stamp.sec + stamp.nanosec * 1e-9
-
-
-class StateEstimator(Node):
-    def __init__(self):
-        super().__init__("state_estimator")
+class StateEstimator(TunableNode):
+    def __init__(self, **kwargs):
+        super().__init__("state_estimator", **kwargs)
         profile = profile_from_node(self)
         self.r_dvl = [
             float(value)
@@ -159,7 +90,19 @@ class StateEstimator(Node):
                 self, "dvl_timeout", constants.ESTIMATOR_DEFAULTS["dvl_timeout"]
             )
         )
-        self.tuning = TunableNumbers(self)
+        self.depth_timeout = float(
+            fixed_parameter(
+                self,
+                "depth_timeout",
+                constants.CONTROLLER_DEFAULTS["state_timeout"],
+            )
+        )
+        self.depth_samples = SensorFreshness(self.depth_timeout)
+        self.dvl_samples = SensorFreshness(self.dvl_timeout)
+        self.imu_samples = SensorFreshness(
+            constants.CONTROLLER_DEFAULTS["state_timeout"]
+        )
+        self.last_clock_t = None
         for name in ("kp", "ki", "depth_tau", "heave_tau"):
             number = self.tuning.number(
                 name,
@@ -170,29 +113,7 @@ class StateEstimator(Node):
             setattr(self, name, number.get())
             number.bind_to(self, name)
 
-        # Attitude state.
-        self.q = (1.0, 0.0, 0.0, 0.0)
-        self.bias = [0.0, 0.0, 0.0]
-        self.rates = (0.0, 0.0, 0.0)
-        self.last_imu_t = None
-
-        # Depth state.
-        self.depth = None  # filtered, m, +down
-        self.heave_up = 0.0  # m/s, +up
-        self.last_depth_t = None
-        self.last_depth_raw_t = None
-
-        # Position state (DVL).
-        self.x = 0.0
-        self.y = 0.0
-        self.v_body = (
-            0.0,
-            0.0,
-            0.0,
-        )  # last DVL body velocity, lever arm removed
-        self.v_world_prev = None
-        self.last_dvl_t = None  # message stamp, for integration dt
-        self.last_dvl_rx = None  # node clock, for the timeout
+        self.reset_filters()
 
         self.pub_state = self.create_publisher(Odometry, "/sub/state", 10)
         self.pub_rpy = self.create_publisher(
@@ -209,18 +130,54 @@ class StateEstimator(Node):
             f"(kp={self.kp}, ki={self.ki}); yaw starts at 0 here"
         )
 
+    def reset_filters(self):
+        """Discard estimates and sample history across simulation epochs."""
+        self.depth_samples.reset()
+        self.dvl_samples.reset()
+        self.imu_samples.reset()
+        self.q = (1.0, 0.0, 0.0, 0.0)
+        self.bias = [0.0, 0.0, 0.0]
+        self.rates = (0.0, 0.0, 0.0)
+        self.last_imu_t = None
+
+        # Depth state.
+        self.depth = None  # filtered, m, +down
+        self.heave_up = 0.0  # m/s, +up
+        self.last_depth_t = None
+
+        # Position state (DVL).
+        self.x = 0.0
+        self.y = 0.0
+        self.v_body = (
+            0.0,
+            0.0,
+            0.0,
+        )  # last DVL body velocity, lever arm removed
+        self.v_world_prev = None
+        self.last_dvl_t = None  # message stamp, for integration dt
+        self.last_dvl_rx = None  # node clock, for the timeout
+
+    def now(self):
+        t = self.get_clock().now().nanoseconds * 1e-9
+        if self.last_clock_t is not None and t < self.last_clock_t:
+            self.reset_filters()
+            self.get_logger().warn("Clock rewound: waiting for fresh sensors")
+        self.last_clock_t = t
+        return t
+
     # ---------------------------------------------------------------- depth
     def on_depth(self, msg: Float64):
-        t = self.get_clock().now().nanoseconds * 1e-9
+        t = self.now()
         raw = msg.data
-        if self.depth is None:
+        if not self.depth_samples.accept(t, t, (raw,)):
+            return
+        if self.depth is None or t - self.last_depth_t >= self.depth_timeout:
             self.depth = raw
+            self.heave_up = 0.0
             self.last_depth_t = t
             return
         dt = t - self.last_depth_t
         self.last_depth_t = t
-        if not (0.0 < dt < 0.5):
-            return
         prev = self.depth
         a = dt / (self.depth_tau + dt)
         self.depth += a * (raw - self.depth)
@@ -232,9 +189,12 @@ class StateEstimator(Node):
 
     # ------------------------------------------------------------------ dvl
     def on_dvl(self, msg: TwistWithCovarianceStamped):
+        now = self.now()
         t = stamp_to_sec(msg.header.stamp)
-        self.last_dvl_rx = self.get_clock().now().nanoseconds * 1e-9
         v = msg.twist.twist.linear
+        if not self.dvl_samples.accept(t, now, (v.x, v.y, v.z)):
+            return
+        self.last_dvl_rx = now
         wx, wy, wz = self.rates
         rx, ry, rz = self.r_dvl
         # The DVL saw v_dvl = v_body + omega x r. Undo the lever arm.
@@ -255,15 +215,16 @@ class StateEstimator(Node):
         self.v_world_prev = vw
 
     def dvl_fresh(self):
-        return (
-            self.last_dvl_rx is not None
-            and self.get_clock().now().nanoseconds * 1e-9 - self.last_dvl_rx
-            < self.dvl_timeout
-        )
+        return self.dvl_samples.fresh(self.now())
 
     # ------------------------------------------------------------------ imu
     def on_imu(self, msg: Imu):
+        now = self.now()
         t = stamp_to_sec(msg.header.stamp)
+        w = msg.angular_velocity
+        a = msg.linear_acceleration
+        if not self.imu_samples.accept(t, now, (w.x, w.y, w.z, a.x, a.y, a.z)):
+            return
         if self.last_imu_t is None:
             self.last_imu_t = t
             return
@@ -272,8 +233,6 @@ class StateEstimator(Node):
         if not (0.0 < dt < 0.1):
             return  # first message, a pause, or a sim reset: skip the step
 
-        w = msg.angular_velocity
-        a = msg.linear_acceleration
         gx, gy, gz = w.x - self.bias[0], w.y - self.bias[1], w.z - self.bias[2]
 
         # Accelerometer correction. Only trust it when the magnitude looks
@@ -295,7 +254,7 @@ class StateEstimator(Node):
         # Integrate: q_dot = 0.5 * q (x) (0, omega_body)
         dq = q_mult(self.q, (0.0, gx, gy, gz))
         self.q = q_normalize(
-            tuple(c + 0.5 * d * dt for c, d in zip(self.q, dq))
+            tuple(c + 0.5 * d * dt for c, d in zip(self.q, dq, strict=True))
         )
         self.rates = (
             w.x - self.bias[0],
@@ -307,14 +266,15 @@ class StateEstimator(Node):
 
     # -------------------------------------------------------------- publish
     def publish(self, stamp):
-        if self.depth is None:
-            return  # no depth yet: a state with a made-up z is worse than none
+        now = self.now()
+        if not self.depth_samples.fresh(now):
+            return
 
         odom = Odometry()
         odom.header.stamp = stamp
         odom.header.frame_id = "world"
         odom.child_frame_id = "base_link"
-        fresh = self.dvl_fresh()
+        fresh = self.dvl_samples.fresh(now)
         if not fresh:
             self.v_body = (0.0, 0.0, 0.0)
             self.v_world_prev = None

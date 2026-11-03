@@ -46,9 +46,11 @@ def main():
         ]
     )
     controller = DepthHeadingController()
-    controller.state = Odometry()
-    controller.state.pose.pose.orientation.w = 1.0
-    controller.state.pose.pose.position.z = -1.0
+    state = Odometry()
+    state.header.frame_id = "world"
+    state.child_frame_id = "base_link"
+    state.pose.pose.orientation.w = 1.0
+    state.pose.pose.position.z = -1.0
     controller.depth_sp = 1.2
     controller.heading_sp = 0.1
     controller.roll_sp = 0.1
@@ -59,7 +61,8 @@ def main():
     original = controller.control_timer.callback
 
     def measured_callback():
-        controller.state_rx = controller.now()
+        state.header.stamp = controller.get_clock().now().to_msg()
+        controller.on_state(state)
         started = time.perf_counter()
         original()
         durations.append(time.perf_counter() - started)

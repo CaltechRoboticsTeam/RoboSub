@@ -1,9 +1,4 @@
-"""Saved T200 / Basic ESC R3 configuration for the future vehicle.
-
-Mounts are a planning copy of the current M5 measurements. They have not
-been measured on the future vehicle. Voltage, channels and polarity are
-unverified setup defaults.
-"""
+"""Future T200 vehicle geometry and output limits."""
 
 import math
 

@@ -73,10 +73,8 @@
 
       <link name="base_link">
         <inertial>
-          <!-- Hull is 0.5 x 0.4 x 0.2 m = 0.04 m^3, so it displaces 40 kg of
-               water. Mass 39.5 kg => slightly POSITIVELY buoyant, which is how
-               real AUVs are trimmed: lose power and the sub floats up rather
-               than sinking to the bottom of the pool. -->
+          <!-- Template physics. The current M5 profile replaces mass,
+               inertia, contact and displacement using its simulation data. -->
           <pose>0 0 -0.05 0 0 0</pose>
           <mass>39.5</mass>
           <inertia>
@@ -347,13 +345,8 @@
         <parent>base_link</parent><child>thr_4</child>
         <axis><xyz>0 0 1</xyz><limit><lower>-1e16</lower><upper>1e16</upper></limit></axis>
       </joint>
-      <!-- HYDRODYNAMICS: added mass + drag (Fossen's equations). Without this
-           the sub coasts forever like it's in space.
-           NOTE: no quadratic ANGULAR terms (kPP/mQQ/nRR). Gazebo integrates
-           hydrodynamics explicitly, and once the hull picks up angular rate
-           those terms diverge and the sim dies with
-           "ODE INTERNAL ERROR 1: assertion aabbBound >= dMinIntExact".
-           Strong LINEAR angular damping keeps rotation bounded instead. -->
+      <!-- Template hydrodynamics. The current M5 profile uses borrowed
+           BlueROV2 damping and native DART added mass instead. -->
       <plugin filename="gz-sim-hydrodynamics-system" name="gz::sim::systems::Hydrodynamics">
         <link_name>base_link</link_name>
         <!-- added mass: water the hull must accelerate along with itself -->
@@ -363,7 +356,9 @@
         <xU>-50.0</xU>       <yV>-120.0</yV>      <zW>-120.0</zW>
         <kP>-15.0</kP>       <mQ>-25.0</mQ>       <nR>-25.0</nR>
         <!-- quadratic damping, translation only -->
-        <xUU>-10.0</xUU>     <yVV>-40.0</yVV>     <zWW>-40.0</zWW>
+        <xUabsU>-10.0</xUabsU>
+        <yVabsV>-40.0</yVabsV>
+        <zWabsW>-40.0</zWabsW>
       </plugin>
 
       <!-- One Thruster plugin per propeller. Command topic is

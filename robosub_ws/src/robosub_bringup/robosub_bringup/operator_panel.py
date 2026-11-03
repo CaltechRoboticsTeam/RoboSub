@@ -1,4 +1,4 @@
-"""Browser input and read-only command previews for the developer menu."""
+"""Browser input and read-only command previews for the driver station."""
 
 import threading
 import time
@@ -8,7 +8,7 @@ from robosub_control.config import constants
 from robosub_control.utils.tuning import fixed_parameter
 from robosub_control.config.vehicle_profiles import profile_from_node
 from sensor_msgs.msg import Joy
-from std_msgs.msg import Bool, Float64MultiArray, UInt16MultiArray
+from std_msgs.msg import Bool, Float64MultiArray, String, UInt16MultiArray
 
 from robosub_bringup.gamepad_bridge import BrowserGamepad
 
@@ -31,6 +31,12 @@ class OperatorPanel:
         if self.source == "off":
             return
         node.create_subscription(Twist, "/sub/cmd_vel", self.on_command, 1)
+        node.create_subscription(
+            String,
+            "/operator/maneuver",
+            lambda message: self.store("maneuver", message.data),
+            1,
+        )
         node.create_subscription(
             Bool,
             "/operator/enabled",
@@ -71,14 +77,15 @@ class OperatorPanel:
         with self.lock:
             self.values[key] = (time.monotonic(), value)
 
-    def publish_joy(self, axes, enabled):
+    def publish_joy(self, axes, enabled, buttons):
         if self.source == "local":
             self.publisher.publish(Bool(data=enabled))
             return
         message = Joy()
         message.header.stamp = self.node.get_clock().now().to_msg()
         message.axes = [float(value) for value in axes]
-        message.buttons = [int(enabled)]
+        # Browser input carries Enable first, then standard A/B/X/Y flags.
+        message.buttons = [int(enabled), *buttons]
         self.publisher.publish(message)
 
     def update(self, data):
@@ -103,6 +110,7 @@ class OperatorPanel:
             "deadzone": constants.GAMEPAD_DEADZONE,
             "enabled": values.get("enabled", False),
             "command": values.get("command"),
+            "maneuver": values.get("maneuver"),
             "preview": values.get("preview"),
             "preview_ids": [
                 self.profile.M5_MOTOR_IDS[name]

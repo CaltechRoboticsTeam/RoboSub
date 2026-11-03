@@ -10,8 +10,6 @@ THRUSTER_COMMAND_TIMEOUT_S = 0.5
 THRUSTER_WATCHDOG_PERIOD_S = 0.1
 MISSION_PERIOD_S = 0.2
 
-# Overrides every launch option: True forces tunable numbers to code defaults.
-LOCK_TUNING_DEFAULTS = False
 MIN_CONTROL_RATE_HZ = 1.0
 MAX_CONTROL_RATE_HZ = 1000.0
 
@@ -27,6 +25,8 @@ CONTROLLER_DEFAULTS = {
     "pos_kp": 0.5,
     "pos_kd": 0.3,
     "pos_limit": 0.5,
+    "pos_max_speed": 1.0,
+    "pos_max_acceleration": 0.5,
     "roll_kp": 0.75,
     "roll_ki": 0.5,
     "roll_kd": 0.08,
@@ -34,6 +34,7 @@ CONTROLLER_DEFAULTS = {
     "roll_spin_rate": ROLL_SPIN_RATE_RAD_S,
     "i_limit": 1.0,
     "state_timeout": 0.5,
+    "max_tilt_deg": 30.0,
 }
 
 ESTIMATOR_DEFAULTS = {
@@ -66,7 +67,7 @@ MISSION_DEFAULTS = {
     "step_timeout": 60.0,
 }
 
-# Xbox input: body-relative surge/sway/heave/yaw, with explicit page enable/disable.
+# Xbox inputs are body-relative, with explicit page enable/disable.
 GAMEPAD_DEADZONE = 0.08
 GAMEPAD_MAX_EFFORT = 1.0
 GAMEPAD_PUBLISH_RATE_HZ = 20.0

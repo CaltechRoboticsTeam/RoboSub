@@ -1,9 +1,4 @@
-"""Allocate normalized body efforts using the selected vehicle profile.
-
-T200 targets are newtons. M5 targets are normalized power fractions using an
-uncalibrated equal-authority approximation. Pitch is not independently
-controllable. Named motor order is FR,FL,BR,BL,RD,LD; no bus is written.
-"""
+"""Allocate body efforts to the selected vehicle's thrusters."""
 
 import math
 

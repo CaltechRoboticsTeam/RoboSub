@@ -1,7 +1,9 @@
 """Start here: choose real or simulated I/O around shared movement programs."""
 
+import errno
 import math
 from pathlib import Path
+import socket
 
 from ament_index_python.packages import (
     PackageNotFoundError,
@@ -20,6 +22,7 @@ from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from robosub_bringup.session import session_actions, session_arguments
 from robosub_control.config import constants
 from robosub_control.config.vehicle_profiles import get_profile
 
@@ -32,6 +35,23 @@ def include(package, filename, arguments):
     )
 
 
+def check_driver_station_port(port):
+    """Catch an existing driver station before starting another robot stack."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            listener.bind(("127.0.0.1", port))
+        except OSError as error:
+            if error.errno != errno.EADDRINUSE:
+                raise
+            raise RuntimeError(
+                f"Driver station port {port} is already in use. "
+                "Stop the previous RoboSub launch with Ctrl+C before "
+                "starting this one. Two robot stacks on the same ROS "
+                "domain can command the same simulated thrusters."
+            ) from error
+
+
 def start(context):
     def argument(name):
         return LaunchConfiguration(name).perform(context)
@@ -41,7 +61,11 @@ def start(context):
     if mode not in ("sim", "real"):
         raise ValueError("mode must be sim or real")
     simulated = mode == "sim"
-    tuning = argument("tuning") == "true"
+    world = argument("world")
+    if world not in ("pool", "bb_woollett"):
+        raise ValueError("world must be pool or bb_woollett")
+    driver_station = argument("driver_station") == "true"
+    plots = argument("plots") == "true"
     mission = argument("mission") == "true"
     teleop = argument("teleop")
     if teleop not in ("off", "browser", "local"):
@@ -56,9 +80,13 @@ def start(context):
         raise ValueError("actuators must be preview or teensy_usb")
     physical = actuators == "teensy_usb"
     if physical and (
-        simulated or profile.NAME != "current_m5" or teleop == "off"
+        simulated
+        or profile.NAME != "current_m5"
+        or (teleop == "off" and not mission)
     ):
-        raise ValueError("teensy_usb requires real current_m5 teleop")
+        raise ValueError(
+            "teensy_usb requires real current_m5 teleop or mission"
+        )
     vision = argument("vision")
     vision = not simulated if vision == "auto" else vision == "true"
     rate = float(argument("control_rate"))
@@ -76,23 +104,28 @@ def start(context):
             f"output_rate must be 1-{profile.MAX_OUTPUT_RATE_HZ:g} Hz "
             f"for {profile.NAME}"
         )
-    if tuning and constants.LOCK_TUNING_DEFAULTS:
-        raise ValueError("Live tuning is locked in constants.py")
     if simulated and vision:
         raise ValueError("Gazebo stereo perception is not implemented")
-    if not simulated and mission:
-        raise ValueError("Real mission startup needs hardware drivers first")
-    tuning_file = argument("tuning_file")
-    if tuning_file and not Path(tuning_file).is_file():
-        raise ValueError(f"Tuning file does not exist: {tuning_file}")
-    if tuning_file and not tuning:
-        raise ValueError("tuning_file requires tuning:=true")
-    #Edge cases have been handled. Time to build the actual launch description. The rest of the code is just actual routing, and SHOULD be self explanatory.
+    mission_config = argument("mission_config")
+    if mission_config and not mission:
+        raise ValueError("mission_config requires mission:=true")
+    if mission_config and not Path(mission_config).is_file():
+        raise ValueError(f"Mission config does not exist: {mission_config}")
+    if driver_station or teleop != "off":
+        port = int(argument("driver_station_port"))
+        if not 1 <= port <= 65535:
+            raise ValueError("driver_station_port must be between 1 and 65535")
+        check_driver_station_port(port)
+    if plots:
+        try:
+            get_package_share_directory("rqt_plot")
+        except PackageNotFoundError as error:
+            raise RuntimeError(
+                "Install/source rqt_plot before using plots:=true"
+            ) from error
     shared = {
         "vehicle": profile.NAME,
         "manual_control": str(teleop != "off").lower(),
-        "tuning": str(tuning).lower(),
-        "tuning_file": tuning_file,
         "control_rate": str(rate),
         "output_rate": str(output_rate),
     }
@@ -104,6 +137,7 @@ def start(context):
                 {
                     **shared,
                     "gui": argument("gui"),
+                    "world": world,
                 },
             )
         ]
@@ -112,11 +146,11 @@ def start(context):
             LogInfo(
                 msg=(
                     f"Real mode: actuator transport={actuators}. "
-                    "Automatic hold needs pressure/DVL and an IMU adapter; "
-                    "manual control uses body efforts directly."
+                    "Using existing MAVROS IMU, USB/MAVROS pressure and "
+                    "DVL odometry through hardware_sensors. "
+                    "Manual control uses body efforts directly."
                 )
             ),
-            #Get our State estimator and Depth/Heading controller running/listening for their inputs, as well as actuator_commands and how we do thruster mixing (this will be needed for any mission in Real)
             include(
                 "robosub_control",
                 "vehicle.launch.py",
@@ -149,17 +183,19 @@ def start(context):
             )
         )
     if mission:
-        #if auto, do auto.
+        # if auto, do auto.
         actions.append(
             Node(
                 package="robosub_control",
                 executable="mission",
                 output="screen",
-                parameters=[{"use_sim_time": simulated}],
+                parameters=[
+                    *([mission_config] if mission_config else []),
+                    {"use_sim_time": simulated},
+                ],
             )
         )
     if teleop != "off":
-        #Listen for Xbox controller commands from the operator computer, and send them to the thruster mixer. This is how we actually control the vehicle in real life.
         actions.append(
             Node(
                 package="robosub_control",
@@ -168,14 +204,17 @@ def start(context):
                 parameters=[
                     {
                         "source": teleop,
+                        "vehicle_profile": profile.NAME,
                         "max_effort": teleop_scale,
-                        "use_sim_time": False,
+                        "manual_control": False,
+                        "rate": rate,
+                        "output_rate": output_rate,
+                        "use_sim_time": simulated,
                     }
                 ],
             )
         )
     if teleop == "local":
-        #shouldn't ever happen, but Codex wrote this which supports a USB controller plugged into the Jetson. This is a fallback in case the Xbox controller isn't working over the network.
         try:
             get_package_share_directory("joy")
         except PackageNotFoundError as error:
@@ -203,16 +242,11 @@ def start(context):
                 remappings=[("joy", "/operator/joy")],
             )
         )
-    if tuning or teleop != "off":
-        # Use the tuning menu to adjust the controller gains and see the effects in real time. 
-        #Access via ssh -N -L 8765:127.0.0.1:8765 crt@100.95.114.100
-        port = int(argument("tuning_port"))
-        if not 1 <= port <= 65535:
-            raise ValueError("tuning_port must be between 1 and 65535")
+    if driver_station or teleop != "off":
         actions.append(
             Node(
                 package="robosub_bringup",
-                executable="tuning_menu",
+                executable="driver_station",
                 output="screen",
                 parameters=[
                     {
@@ -227,9 +261,31 @@ def start(context):
                 ],
             )
         )
-    # If we're in physical mode (THIS ISN'T A "systems" test, we ACTUALLY want motor output), we need to start the Teensy actuator driver.
-    # this will listen for target efforts from anything, and send them to the Teensy over Serial1. It will also publish the actual motor efforts back to ROS.
-    # without this, the Teensy will not receive any commands and the motors will not move, regardless of whether the thruster_mixer is running or not. This allows for previewing the commands IN REAL without actually destroying the motors.
+    if plots:
+        position_fields = [
+            f"{topic}/pose/pose/position/{axis}"
+            for axis in ("x", "y")
+            for topic in ("/sub/reference", "/sub/state", "/sub/odom")
+        ]
+        for name, fields in (
+            ("position_plot", position_fields),
+            ("depth_plot", ["/sub/setpoint/depth/data", "/depth/data"]),
+            (
+                "attitude_plot",
+                [f"/sub/state/rpy/vector/{axis}" for axis in ("x", "y", "z")],
+            ),
+        ):
+            actions.append(
+                Node(
+                    package="rqt_plot",
+                    executable="rqt_plot",
+                    name=name,
+                    arguments=fields,
+                    parameters=[{"use_sim_time": simulated}],
+                    output="screen",
+                )
+            )
+    # Physical USB transport is selected separately from numeric previews.
     if physical:
         driver = Node(
             package="robosub_control",
@@ -254,12 +310,11 @@ def start(context):
                 driver,
             ]
         )
-    return actions
+    return session_actions(context, simulated=simulated, robot_actions=actions)
 
 
 def generate_launch_description():
-    '''Ask
-    the user for the vehicle profile, simulation mode, and teleop mode, then start the appropriate nodes.'''
+    """Declare vehicle, I/O and operator settings for the robot launch."""
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -274,6 +329,12 @@ def generate_launch_description():
                 "gui", default_value="true", choices=["true", "false"]
             ),
             DeclareLaunchArgument(
+                "world",
+                default_value="pool",
+                choices=["pool", "bb_woollett"],
+                description="Gazebo environment used in simulation mode",
+            ),
+            DeclareLaunchArgument(
                 "vision",
                 default_value="auto",
                 choices=["auto", "true", "false"],
@@ -283,8 +344,17 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "mission", default_value="false", choices=["true", "false"]
             ),
+            DeclareLaunchArgument("mission_config", default_value=""),
             DeclareLaunchArgument(
-                "tuning", default_value="false", choices=["true", "false"]
+                "driver_station",
+                default_value="false",
+                choices=["true", "false"],
+            ),
+            DeclareLaunchArgument(
+                "plots",
+                default_value="false",
+                choices=["true", "false"],
+                description="Open position and depth diagnostic plots",
             ),
             DeclareLaunchArgument(
                 "teleop",
@@ -308,8 +378,8 @@ def generate_launch_description():
                     "/dev/serial/by-id/usb-Teensyduino_USB_Serial_19620450-if00"
                 ),
             ),
-            DeclareLaunchArgument("tuning_file", default_value=""),
-            DeclareLaunchArgument("tuning_port", default_value="8765"),
+            DeclareLaunchArgument("driver_station_port", default_value="8765"),
+            *session_arguments(),
             DeclareLaunchArgument(
                 "control_rate",
                 default_value=str(constants.CONTROLLER_DEFAULTS["rate"]),

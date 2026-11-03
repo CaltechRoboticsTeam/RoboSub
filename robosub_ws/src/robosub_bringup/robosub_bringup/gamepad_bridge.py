@@ -5,7 +5,11 @@ import time
 
 from robosub_control.config import constants
 
-from robosub_control.teleop.gamepad import validate_axes
+from robosub_control.teleop.gamepad import (
+    NO_BUTTONS,
+    validate_axes,
+    validate_buttons,
+)
 
 
 class BrowserGamepad:
@@ -34,6 +38,7 @@ class BrowserGamepad:
         if type(sequence) is not int or not 0 <= sequence < 2**53:
             raise ValueError("Invalid controller sequence")
         axes = validate_axes(data.get("axes", []))
+        buttons = validate_buttons(data.get("buttons", NO_BUTTONS))
         with self.lock:
             now = time.monotonic()
             expired = now - self.last_rx > constants.GAMEPAD_INPUT_TIMEOUT_S
@@ -44,5 +49,5 @@ class BrowserGamepad:
             self.session = session
             self.sequence = sequence
             self.last_rx = now
-            self.publish(axes, enabled)
+            self.publish(axes, enabled, buttons)
         return {"successful": True}

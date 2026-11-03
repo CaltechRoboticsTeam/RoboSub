@@ -1,8 +1,4 @@
-"""Preview profile-specific commands; optionally apply them in simulation.
-
-M5: normalized power in named motor order. T200: PWM in board-channel order.
-This node never opens a hardware port or transmits on a physical bus.
-"""
+"""Publish actuator previews and simulated thruster forces."""
 
 import rclpy
 from rclpy.node import Node
@@ -14,9 +10,10 @@ from std_msgs.msg import (
 )
 
 from robosub_control.config import constants
+from robosub_control.config.vehicle_profiles import profile_from_node
+from robosub_control.thrusters.m5_sim import M5SimulationModel
 from robosub_control.thrusters.thrust_allocation import ThrustAllocator
 from robosub_control.utils.tuning import fixed_parameter
-from robosub_control.config.vehicle_profiles import profile_from_node
 
 
 class ActuatorCommands(Node):
@@ -39,6 +36,24 @@ class ActuatorCommands(Node):
             )
         self.rate = min(rate, output_rate)
         self.allocator = ThrustAllocator(vehicle=profile.NAME)
+        self.m5_sim = None
+        if self.simulation and self.allocator.is_m5:
+            self.m5_sim = M5SimulationModel(
+                power_limit_w=fixed_parameter(
+                    self, "m5_sim_power_limit_w", 570.0
+                ),
+                command_power_exponent=fixed_parameter(
+                    self, "m5_sim_command_power_exponent", 3.0
+                ),
+                reverse_thrust_ratio=fixed_parameter(
+                    self, "m5_sim_reverse_thrust_ratio", 1.0
+                ),
+            )
+            self.get_logger().warn(
+                "M5 simulation assumes fixed 48 V and a digitized static "
+                f"thrust chart, capped at {self.m5_sim.power_limit_w:g} W. "
+                "Command-to-power and reverse thrust are uncalibrated."
+            )
         self.started = None
         self.last_rx = None
         self.pending_commands = (self.profile.NEUTRAL_COMMAND,)
@@ -112,9 +127,8 @@ class ActuatorCommands(Node):
         for index, (name, publisher) in enumerate(self.force_pubs.items()):
             if self.allocator.is_m5:
                 polarity = -1.0 if profile.THRUSTER_REVERSED[name] else 1.0
-                force = (
-                    commands[index] * polarity * profile.SIM_FULL_POWER_FORCE_N
-                )
+                force = self.m5_sim.force_from_command(commands[index])
+                force *= polarity
             else:
                 channel = profile.THRUSTER_CHANNELS[name]
                 force = self.allocator.model.force_from_pwm(

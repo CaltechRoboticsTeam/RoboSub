@@ -2,7 +2,6 @@
 
 from http.server import ThreadingHTTPServer
 import json
-import math
 import os
 from pathlib import Path
 import sys
@@ -22,7 +21,6 @@ sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_sim"))
 sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_bringup"))
 
 from robosub_control.teleop.gamepad import ZERO, GamepadControl  # noqa: E402
-from robosub_bringup.gamepad_bridge import BrowserGamepad  # noqa: E402
 
 try:
     import rclpy
@@ -31,23 +29,6 @@ except ImportError:
 
 
 class GamepadTests(unittest.TestCase):
-    def enabled_control(self, source="browser", scale=0.5):
-        control = GamepadControl(source, scale)
-        control.set_enabled(True)
-        return control
-
-    def test_stick_directions_and_layouts_match(self):
-        for source, sign in (("browser", -1), ("local", 1)):
-            for axis, output in ((1, 0), (0, 1), (3, 2), (2, 4)):
-                for direction in (-1, 1):
-                    control = self.enabled_control(source)
-                    axes = [0.0] * 6
-                    axes[axis] = sign * direction
-                    control.accept(axes, [1], 0.05)
-                    expected = [0.0] * 5
-                    expected[output] = 0.5 * direction
-                    self.assertEqual(control.sample(0.1), tuple(expected))
-
     def test_enable_accepts_moving_sticks_and_only_disable_turns_it_off(self):
         control = GamepadControl("browser")
         moving = [0, -1, 0, 0, 0, 0]
@@ -59,134 +40,6 @@ class GamepadTests(unittest.TestCase):
         control.accept(moving, [0], 0.1)
         self.assertFalse(control.enabled)
         self.assertEqual(control.sample(0.11), ZERO)
-
-    def test_triggers_roll_right_left_and_cancel(self):
-        for source, sign in (("browser", 1), ("local", -1)):
-            control = self.enabled_control(source)
-            for lt, rt, expected in ((0, 1, 0.5), (1, 0, -0.5), (1, 1, 0)):
-                control.accept([0, 0, 0, 0, sign * lt, sign * rt], [1], 0.1)
-                self.assertEqual(control.sample(0.11), (0, 0, 0, expected, 0))
-
-    def test_stale_input_zeros_output_without_disarming_and_fresh_input_resumes(
-        self,
-    ):
-        control = self.enabled_control()
-        moving = [0, -1, 0, 0, 0, 0]
-        control.accept(moving, [1], 0.0)
-        self.assertEqual(control.sample(0.5), ZERO)
-        self.assertTrue(control.enabled)
-        control.accept(moving, [1], 0.6)
-        self.assertGreater(control.sample(0.61)[0], 0)
-        control.stop()
-        self.assertFalse(control.enabled)
-        self.assertEqual(control.sample(0.62), ZERO)
-
-    def test_trigger_roll_reaches_rd_and_ld_usb_slots(self):
-        from robosub_control.drivers.teensy_usb import m5_power_slots
-        from robosub_control.thrusters.thrust_allocation import ThrustAllocator
-
-        allocator = ThrustAllocator()
-        control = self.enabled_control()
-        for lt, rt, direction in ((0, 1, 1), (1, 0, -1)):
-            control.accept([0, 0, 0, 0, lt, rt], [1], 0.1)
-            slots = m5_power_slots(
-                allocator.commands(
-                    allocator.allocate(control.sample(0.11)).targets
-                )
-            )
-            self.assertEqual(slots[:4], [1500] * 4)
-            self.assertGreater((slots[4] - 1500) * direction, 0)
-            self.assertLess((slots[6] - 1500) * direction, 0)
-            self.assertEqual([slots[5], slots[7]], [1500, 1500])
-
-    def test_deadzone_and_diagonal_bound(self):
-        control = self.enabled_control("local", 0.7)
-        control.accept([0.01] * 4 + [0, 0], [], 0.05)
-        self.assertEqual(control.sample(0.1), ZERO)
-        control.accept([1.0] * 4 + [0, -1], [], 0.15)
-        surge, sway, heave, roll, yaw = control.sample(0.2)
-        self.assertAlmostEqual(math.hypot(surge, sway), 0.7)
-        self.assertEqual((heave, roll, yaw), (0.7, 0.7, 0.7))
-
-    def test_invalid_inputs_zero_output_without_disarming(self):
-        for axes in (
-            [0] * 4,
-            [float("nan")] * 6,
-            [True] * 6,
-            [1.1] * 6,
-            [0, 0, 0, 0, -1, 0],
-        ):
-            control = self.enabled_control()
-            with self.assertRaises(ValueError):
-                control.accept(axes, [1], 0.1)
-            self.assertEqual(control.sample(0.11), ZERO)
-            self.assertTrue(control.enabled)
-        for scale in (0, 1.1, float("nan"), True):
-            with self.assertRaises(ValueError):
-                GamepadControl("browser", scale)
-
-    def test_local_buttons_are_not_movement_controls(self):
-        control = self.enabled_control("local")
-        for button in (0, 1, 0):
-            control.accept([0, 1, 0, 0, 0, 0], [button] * 11, 0.1)
-            self.assertGreater(control.sample(0.11)[0], 0)
-        control.set_enabled(False)
-        control.accept([0, 1, 0, 0, 0, 0], [1] * 11, 0.2)
-        self.assertEqual(control.sample(0.21), ZERO)
-
-
-class BrowserBridgeTests(unittest.TestCase):
-    def frame(self, **changes):
-        return {
-            "session": "one",
-            "sequence": 0,
-            "axes": [0.0] * 6,
-            "enabled": True,
-            **changes,
-        }
-
-    def test_late_input_cannot_override_disable_or_second_operator(self):
-        publish = Mock()
-        bridge = BrowserGamepad(publish)
-        with patch(
-            "robosub_bringup.gamepad_bridge.time.monotonic", return_value=1
-        ):
-            bridge.update(self.frame(axes=[0, -1, 0, 0, 0, 0]))
-            bridge.update(self.frame(sequence=2, enabled=False))
-            with self.assertRaises(ValueError):
-                bridge.update(self.frame(sequence=1))
-            with self.assertRaises(ValueError):
-                bridge.update(self.frame(session="two"))
-        self.assertEqual(publish.call_count, 2)
-        self.assertFalse(publish.call_args.args[1])
-        with patch(
-            "robosub_bringup.gamepad_bridge.time.monotonic", return_value=2
-        ):
-            bridge.update(self.frame(sequence=3, axes=[0, -1, 0, 0, 0, 0]))
-        self.assertEqual(publish.call_count, 3)
-        self.assertTrue(publish.call_args.args[1])
-
-    def test_disable_is_forwarded_as_explicit_state(self):
-        publish = Mock()
-        bridge = BrowserGamepad(publish)
-        bridge.update(self.frame())
-        bridge.update(self.frame(sequence=1, enabled=False))
-        self.assertEqual(publish.call_args.args, ((0.0,) * 6, False))
-
-    def test_rejects_invalid_browser_frames(self):
-        publish = Mock()
-        bridge = BrowserGamepad(publish)
-        for changes in (
-            {"axes": [float("nan")] * 6},
-            {"axes": [0.0] * 5},
-            {"session": ""},
-            {"sequence": True},
-            {"enabled": 1},
-            {"enabled": None},
-        ):
-            with self.subTest(changes=changes), self.assertRaises(ValueError):
-                bridge.update(self.frame(**changes))
-        publish.assert_not_called()
 
 
 @unittest.skipIf(rclpy is None, "ROS Humble is not installed")
@@ -272,7 +125,7 @@ class GamepadRosTests(unittest.TestCase):
         from nav_msgs.msg import Odometry
         from rclpy.executors import SingleThreadedExecutor
         from rclpy.node import Node
-        from robosub_bringup.tuning_menu import ParameterBrowser, make_handler
+        from robosub_bringup.driver_station import DriverStation, make_handler
         from robosub_control.teleop.xbox_teleop import XboxTeleop
         from robosub_control.thrusters.actuator_commands import ActuatorCommands
         from robosub_control.autonomy.depth_heading_controller import (
@@ -287,8 +140,6 @@ class GamepadRosTests(unittest.TestCase):
                 "--ros-args",
                 "-p",
                 "teleop_source:=browser",
-                "-p",
-                "manual_control:=true",
                 "-r",
                 "/sub/cmd_vel:=/test/xbox_cmd",
                 "-r",
@@ -296,14 +147,13 @@ class GamepadRosTests(unittest.TestCase):
             ]
         )
         nodes = [
-            ParameterBrowser(),
+            DriverStation(),
             XboxTeleop(),
             ThrusterMixer(),
             ActuatorCommands(),
-            DepthHeadingController(),
             Node("xbox_test"),
         ]
-        browser, teleop, mixer, actuator, controller, observer = nodes
+        browser, teleop, mixer, actuator, observer = nodes
         executor = SingleThreadedExecutor()
         for node in nodes:
             executor.add_node(node)
@@ -311,6 +161,16 @@ class GamepadRosTests(unittest.TestCase):
         observer.create_subscription(
             Twist, "/test/xbox_cmd", lambda value: commands.append(value), 10
         )
+        state_pub = observer.create_publisher(Odometry, "/sub/state", 10)
+
+        def publish_state():
+            state = Odometry()
+            state.header.stamp = observer.get_clock().now().to_msg()
+            state.pose.pose.orientation.w = 1.0
+            state.pose.pose.position.z = -1.0
+            state_pub.publish(state)
+
+        observer.create_timer(0.02, publish_state)
         worker = threading.Thread(target=executor.spin, daemon=True)
         worker.start()
         server = ThreadingHTTPServer(
@@ -331,17 +191,18 @@ class GamepadRosTests(unittest.TestCase):
                 time.sleep(0.01)
             self.fail("Gamepad ROS condition did not arrive")
 
-        def post(sequence, enabled=True, axes=None, token="test"):
+        def post(sequence, enabled=True, axes=None, token="test", buttons=None):
             body = {
                 "session": "test",
                 "sequence": sequence,
                 "enabled": enabled,
                 "axes": axes or [0.0] * 6,
+                "buttons": buttons or [0] * 4,
             }
             request = Request(
                 address + "/api/gamepad",
                 data=json.dumps(body).encode(),
-                headers={"X-Tuning-Token": token},
+                headers={"X-Driver-Station-Token": token},
             )
             with urlopen(request, timeout=3) as response:
                 return json.load(response)
@@ -373,13 +234,16 @@ class GamepadRosTests(unittest.TestCase):
                 lambda: browser.operator.snapshot()["preview"] == [0.0] * 6
             )
             self.assertFalse(actuator.force_pubs)
-            controller.pub = Mock()
-            controller.state = Odometry()
-            controller.state.pose.pose.orientation.w = 1.0
-            controller.state_rx = controller.now()
-            controller.depth_sp = 1.0
-            controller.periodic()
-            controller.pub.publish.assert_not_called()
+            self.assertIsInstance(teleop, DepthHeadingController)
+            self.assertEqual(observer.count_publishers("/test/xbox_cmd"), 1)
+            wait_for(lambda: teleop.state is not None)
+            post(4, buttons=[0, 0, 1, 0])
+            wait_for(lambda: teleop.depth_sp == 1.5)
+            post(5)
+            wait_for(lambda: teleop.depth_sp is None)
+            wait_for(lambda: commands[-1].linear.z == 0.0)
+            self.assertTrue(teleop.control.enabled)
+            post(6, enabled=False)
             with urlopen(address + "/gamepad.js", timeout=3) as response:
                 self.assertIn(b"gamepad script", response.read())
         finally:

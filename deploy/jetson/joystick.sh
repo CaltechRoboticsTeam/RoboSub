@@ -10,4 +10,4 @@ fi
 source "${joystick_release}/env.sh"
 exec ros2 launch robosub_bringup robot.launch.py \
   mode:=real vehicle:=current_m5 vision:=false \
-  teleop:=browser tuning:=true actuators:="${joystick_transport}" "$@"
+  teleop:=browser actuators:="${joystick_transport}" "$@"

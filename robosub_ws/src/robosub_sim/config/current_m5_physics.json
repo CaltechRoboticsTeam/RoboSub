@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "mass_kg": 22.6796,
+  "water_density_kg_m3": 1000.0,
+  "excess_buoyancy_kg": 0.2,
+  "center_of_buoyancy_m": [0.0, 0.0, 0.02],
+  "contact_link_mass_kg": 0.001,
+  "collision_padding_m": 0.005,
+  "linear_damping": [4.03, 6.22, 5.18, 0.07, 0.07, 0.07],
+  "quadratic_damping": [18.18, 21.66, 36.99, 1.55, 1.55, 1.55],
+  "borrowed_added_mass_reference": [5.5, 12.7, 14.57, 0.12, 0.12, 0.12],
+  "added_mass": [10.9233333333, 10.9233333333, 10.9233333333, 0.12, 0.12, 0.12],
+  "assumptions": {
+    "mass": "User-reported approximately 50 lb, including all six propeller links and the contact link.",
+    "inertia": "Uniform density over the multipart high-resolution CAD material representation, normalized to total mass. This is a geometry-based prior, not measured inertia.",
+    "center_of_mass": "Aggregate CG is assumed at the body-frame origin to match the current mixer; the CAD uniform-density centroid is not treated as measured CG.",
+    "buoyancy": "Assumed 0.2 kg positive buoyancy; CB 2 cm above CG follows the relative separation in the borrowed BlueROV2 reference after converting its NED frame to our z-up frame.",
+    "drag": "Unscaled BlueROV2 coefficients borrowed as a starting model. CAD silhouettes are recorded separately; no claim of identified coefficients or matched frame openness.",
+    "added_mass": "Provisional isotropic translational added mass: the mean of the three borrowed BlueROV2 translation values, preserving their sum without imposing another hull's unverified directional anisotropy and Munk tipping torque. Rotational values remain borrowed. DART native fluid_added_mass; plugin added mass disabled. This regularization is not measured hydrodynamics or proof of full vehicle stability.",
+    "collision": "Enclosing box of configured rendered CAD with 5 mm padding; frame openings are filled. Contact volume is excluded from buoyancy."
+  },
+  "sources": {
+    "hydrodynamics": "https://github.com/OsloMet-OceanLab/BlueROV2/blob/a536a758924941c0d6305f9a9434ef82e6c3f86e/BlueRov_m_script.m",
+    "buoyancy_pattern": "https://github.com/BumblebeeAS/ardusub_sim/blob/347c659c5470055cb402d654a2bb17647a271dbd/packages/bluerov_sim/models/bluerov2/model.sdf",
+    "buoyancy_pattern_note": "Bumblebee's example separates visible geometry and displacement, but its BlueROV2 dynamics are explicitly untuned; its coefficients were not used here.",
+    "units": "Linear translation: N s/m; quadratic translation: N s^2/m^2; linear rotation: N m s/rad; quadratic rotation: N m s^2/rad^2; added mass: kg and kg m^2."
+  }
+}

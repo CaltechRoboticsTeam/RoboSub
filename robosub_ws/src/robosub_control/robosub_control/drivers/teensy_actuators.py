@@ -10,7 +10,7 @@ from rclpy.signals import SignalHandlerOptions
 from robosub_control.config import constants, current_m5
 from robosub_control.thrusters.thrust_allocation import ThrustAllocator
 from robosub_control.utils.tuning import fixed_parameter
-from std_msgs.msg import Float64MultiArray, MultiArrayDimension
+from std_msgs.msg import Float64, Float64MultiArray, MultiArrayDimension
 
 from robosub_control.drivers.teensy_usb import (
     DEVICE,
@@ -18,6 +18,7 @@ from robosub_control.drivers.teensy_usb import (
     NEUTRAL_US,
     SLOTS,
     TeensyUsb,
+    depth_sample,
     m5_power_slots,
 )
 
@@ -39,7 +40,10 @@ class TeensyActuators(Node):
         self.create_subscription(
             Float64MultiArray, current_m5.TARGET_TOPIC, self.on_targets, 1
         )
-        self.bridge = TeensyUsb(device)
+        self.depth_pub = self.create_publisher(
+            Float64, "/sub/sensors/depth_usb", 10
+        )
+        self.bridge = TeensyUsb(device, on_depth=self.on_depth)
         try:
             info = self.bridge.connect()
             if info["rs485_serial"] != 1:
@@ -66,6 +70,20 @@ class TeensyActuators(Node):
     def stop(self):
         self.last_rx = None
         self.pending = [NEUTRAL_US] * SLOTS
+
+    def on_depth(self, fields):
+        try:
+            sample = depth_sample(fields)
+        except ValueError as error:
+            self.get_logger().warning(str(error), throttle_duration_sec=2.0)
+            return
+        if sample["depth_m"] is None:
+            self.get_logger().warning(
+                f"Pressure ADC={sample['adc']}; depth unavailable.",
+                throttle_duration_sec=2.0,
+            )
+            return
+        self.depth_pub.publish(Float64(data=sample["depth_m"]))
 
     def on_targets(self, message):
         now = time.monotonic()

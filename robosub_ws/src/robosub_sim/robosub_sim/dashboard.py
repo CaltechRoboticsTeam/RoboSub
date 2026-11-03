@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""Live terminal view of everything the sub senses, estimates and commands.
-
-    ros2 run robosub_sim dashboard          # Ctrl-C to quit
-
-Left column: the raw sensor streams the estimator consumes, with their
-message rates (a stream that dies shows 0.0 Hz). Right column: what the
-estimator makes of them, then what the controller is commanding and what
-each thruster is being told. Drive the sub from another terminal and watch
-the numbers move. Subscribes only; changes nothing.
-"""
+"""Display live sensor, estimator and thruster values in a terminal."""
 from collections import deque
 import math
 import sys

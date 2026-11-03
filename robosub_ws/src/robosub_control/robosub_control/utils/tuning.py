@@ -1,19 +1,15 @@
 """Validated ROS parameters with cached values and committed-change logging."""
 
-import json
 import sys
 
 from rcl_interfaces.msg import (
     FloatingPointRange,
     IntegerRange,
     ParameterDescriptor,
-    ParameterEvent,
     SetParametersResult,
 )
-from rclpy.parameter import Parameter
-from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.node import Node
 
-from robosub_control.config import constants
 from robosub_control.utils.tunable_number import TunableNumber
 
 
@@ -24,47 +20,51 @@ def fixed_parameter(node, name, default):
     ).value
 
 
-class TunableNumbers:
-    """One tuning registry per node, with no per-control-tick network work.
+class TunableNode(Node):
+    """Apply accepted parameter values before their service response is sent.
 
-    Validation callbacks have no side effects. Local caches change only when
-    ROS publishes the event confirming that a parameter update committed.
+    Humble has no post-set callback. Wrap its public setters so validation
+    remains side-effect free and rejected changes never reach the controller.
     """
+
+    def __init__(self, name, **kwargs):
+        super().__init__(name, **kwargs)
+        self.tuning = TunableNumbers(self)
+
+    def set_parameters(self, parameter_list):
+        try:
+            return super().set_parameters(parameter_list)
+        finally:
+            # Non-atomic sets may commit earlier values before a later error.
+            tuning = getattr(self, "tuning", None)
+            if tuning is not None:
+                tuning.sync()
+
+    def set_parameters_atomically(self, parameter_list):
+        result = super().set_parameters_atomically(parameter_list)
+        tuning = getattr(self, "tuning", None)
+        if result.successful and tuning is not None:
+            tuning.sync()
+        return result
+
+
+class TunableNumbers:
+    """Validate numeric parameters and bind committed values to live objects."""
 
     def __init__(self, node):
         self.node = node
         self.numbers = {}
-        requested = node.declare_parameter(
-            "tuning_enabled",
-            False,
-            ParameterDescriptor(read_only=True),
-            ignore_override=constants.LOCK_TUNING_DEFAULTS,
-        ).value
-        self.enabled = requested and not constants.LOCK_TUNING_DEFAULTS
-        if self.enabled:
-            node.add_on_set_parameters_callback(self._validate)
-            qos = QoSProfile(
-                depth=100,
-                reliability=ReliabilityPolicy.RELIABLE,
-                durability=DurabilityPolicy.VOLATILE,
-            )
-            self.subscription = node.create_subscription(
-                ParameterEvent, "/parameter_events", self._on_event, qos
-            )
+        node.add_on_set_parameters_callback(self._validate)
 
     def number(
         self, name, default, *, minimum=None, maximum=None, description=""
     ):
-        """Register a typed number, bounds, and optional browser help text."""
+        """Register a typed number, bounds, and parameter help text."""
         if name in self.numbers:
             raise ValueError(f"Duplicate tunable: {name}")
         number = TunableNumber(default, minimum=minimum, maximum=maximum)
         descriptor = ParameterDescriptor(
             description=description,
-            read_only=not self.enabled,
-            additional_constraints=json.dumps(
-                {"robosub_tunable": True, "default": default}
-            ),
         )
         if type(default) is float:
             descriptor.floating_point_range = [
@@ -88,9 +88,7 @@ class TunableNumbers:
                     to_value=2**63 - 1 if maximum is None else maximum,
                 )
             ]
-        parameter = self.node.declare_parameter(
-            name, default, descriptor, ignore_override=not self.enabled
-        )
+        parameter = self.node.declare_parameter(name, default, descriptor)
         number._commit(parameter.value)
         self.numbers[name] = number
         return number
@@ -105,17 +103,13 @@ class TunableNumbers:
             return SetParametersResult(successful=False, reason=str(error))
         return SetParametersResult(successful=True)
 
-    def _on_event(self, event):
-        if event.node != self.node.get_fully_qualified_name():
-            return
-        for message in [*event.new_parameters, *event.changed_parameters]:
-            number = self.numbers.get(message.name)
-            if number is None:
-                continue
-            value = Parameter.from_parameter_msg(message).value
+    def sync(self):
+        """Read committed local values; no ROS subscriptions or requests."""
+        for name, number in self.numbers.items():
+            value = self.node.get_parameter(name).value
             previous = number.get()
-            number._commit(value)
             if previous != value:
+                number._commit(value)
                 self.node.get_logger().info(
-                    f"Tuning {message.name}: {previous} -> {value}"
+                    f"Tuning {name}: {previous} -> {value}"
                 )

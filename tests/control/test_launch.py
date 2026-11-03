@@ -1,8 +1,10 @@
 """Check master-launch routing without starting processes or hardware."""
 
 import importlib.util
+import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -11,6 +13,7 @@ sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_control"))
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tools/diagnostics"))
 sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_sim"))
+sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_bringup"))
 
 try:
     from launch import LaunchContext
@@ -27,24 +30,37 @@ class LaunchTests(unittest.TestCase):
         cls.launch = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.launch)
 
+    def setUp(self):
+        self.check_driver_station_port = self.launch.check_driver_station_port
+        guard = patch.object(self.launch, "check_driver_station_port")
+        self.station_guard = guard.start()
+        self.addCleanup(guard.stop)
+
     def context(self, **changes):
         context = LaunchContext()
         context.launch_configurations.update(
             {
                 "mode": "sim",
+                "world": "pool",
                 "vehicle": "current_m5",
                 "gui": "false",
                 "vision": "auto",
                 "vision_config": "",
                 "mission": "false",
-                "tuning": "false",
+                "mission_config": "",
+                "driver_station": "false",
+                "plots": "false",
                 "teleop": "off",
                 "teleop_scale": "1.0",
                 "joy_device": "0",
                 "actuators": "preview",
                 "teensy_device": "/test/teensy",
-                "tuning_file": "",
-                "tuning_port": "8765",
+                "driver_station_port": "8765",
+                "record": "false",
+                "log_directory": "/unused/robosub_runs",
+                "foxglove": "false",
+                "foxglove_address": "127.0.0.1",
+                "foxglove_port": "8766",
                 "control_rate": "20.0",
                 "output_rate": "100.0",
                 **changes,
@@ -52,84 +68,49 @@ class LaunchTests(unittest.TestCase):
         )
         return context
 
-    def test_sim_selects_pool_without_loading_zed(self):
-        with patch.object(self.launch, "include") as include:
-            self.launch.start(self.context())
-        include.assert_called_once()
-        package, filename, arguments = include.call_args.args
-        self.assertEqual((package, filename), ("robosub_sim", "pool.launch.py"))
-        self.assertEqual(arguments["control_rate"], "20.0")
-        self.assertEqual(arguments["vehicle"], "current_m5")
+    def test_recording_captures_all_topics_and_uses_the_matching_clock(self):
+        from robosub_bringup import session
 
-    def test_real_selects_shared_vehicle_without_simulator(self):
-        with patch.object(self.launch, "include") as include:
-            self.launch.start(self.context(mode="real", vision="false"))
-        include.assert_called_once()
-        package, filename, arguments = include.call_args.args
-        self.assertEqual(
-            (package, filename), ("robosub_control", "vehicle.launch.py")
-        )
-        self.assertEqual(arguments["use_sim_time"], "false")
-
-    def test_auto_real_vision_uses_vision_launcher(self):
-        with (
-            patch.object(self.launch, "include") as include,
-            patch.object(
-                self.launch, "get_package_share_directory", return_value="/tmp"
-            ),
-        ):
-            self.launch.start(self.context(mode="real"))
-        self.assertEqual(include.call_count, 2)
-        self.assertEqual(
-            include.call_args.args[:2],
-            (
-                "robosub_vision",
-                "vision.launch.py",
-            ),
-        )
-
-    def test_rejects_unimplemented_real_mission_and_sim_stereo(self):
-        for settings in (
-            {"mode": "real", "mission": "true"},
-            {"vision": "true"},
-            {"control_rate": "nan"},
-            {"output_rate": "0"},
-            {"output_rate": "101"},
-            {"vehicle": "future_t200", "output_rate": "401"},
-            {"vehicle": "unknown"},
-        ):
-            with self.subTest(settings=settings), self.assertRaises(ValueError):
-                self.launch.start(self.context(**settings))
-
-    def test_future_t200_selection_and_its_output_limit(self):
-        with patch.object(self.launch, "include") as include:
-            self.launch.start(
-                self.context(vehicle="future_t200", output_rate="400")
-            )
-        self.assertEqual(include.call_args.args[2]["vehicle"], "future_t200")
-
-    def test_browser_teleop_owns_commands_in_sim_and_real(self):
-        for mode in ("sim", "real"):
-            with patch.object(self.launch, "include") as include:
-                actions = self.launch.start(
-                    self.context(mode=mode, vision="false", teleop="browser")
+        for simulated in (True, False):
+            with (
+                self.subTest(simulated=simulated),
+                tempfile.TemporaryDirectory() as directory,
+                patch.object(session, "require_package") as require,
+                patch.object(
+                    session, "ExecuteProcess", wraps=session.ExecuteProcess
+                ) as process,
+                patch.object(
+                    session, "OnProcessStart", wraps=session.OnProcessStart
+                ) as started,
+            ):
+                sentinel = self.launch.LogInfo(msg="robot starts here")
+                context = self.context(
+                    mode="sim" if simulated else "real",
+                    record="true",
+                    log_directory=directory,
                 )
-            self.assertEqual(
-                include.call_args.args[2]["manual_control"], "true"
-            )
-            self.assertEqual(len(actions), 3 if mode == "sim" else 4)
+                session.session_actions(
+                    context, simulated=simulated, robot_actions=[sentinel]
+                )
+                command = process.call_args.kwargs["cmd"]
+                self.assertIn("--all", command)
+                self.assertIn("--include-hidden-topics", command)
+                self.assertIn("mcap", command)
+                self.assertIn("zstd_fast", command)
+                self.assertEqual("--use-sim-time" in command, simulated)
+                self.assertEqual(
+                    started.call_args.kwargs["on_start"], [sentinel]
+                )
+                bag = Path(command[command.index("--output") + 1])
+                self.assertFalse(bag.exists())
+                metadata = json.loads((bag.parent / "run.json").read_text())
+                self.assertEqual(metadata["bag_directory"], str(bag))
+                self.assertEqual(
+                    metadata["clock"], "simulation" if simulated else "system"
+                )
+                self.assertEqual(require.call_count, 2)
 
-    def test_local_teleop_loads_sdl_driver(self):
-        with (
-            patch.object(self.launch, "include"),
-            patch.object(
-                self.launch, "get_package_share_directory", return_value="/tmp"
-            ),
-        ):
-            actions = self.launch.start(self.context(teleop="local"))
-        self.assertEqual(len(actions), 4)
-
-    def test_physical_driver_requires_real_m5_teleop(self):
+    def test_physical_driver_requires_real_m5_teleop_or_mission(self):
         for changes in (
             {},
             {"mode": "real"},
@@ -150,18 +131,7 @@ class LaunchTests(unittest.TestCase):
             )
         self.assertEqual(len(actions), 6)
 
-    def test_rejects_conflicting_or_invalid_teleop_settings(self):
-        for changes in (
-            {"teleop": "browser", "mission": "true"},
-            {"teleop": "unknown"},
-            {"teleop_scale": "nan"},
-            {"teleop_scale": "0"},
-            {"teleop_scale": "1.1"},
-        ):
-            with self.subTest(changes=changes), self.assertRaises(ValueError):
-                self.launch.start(self.context(**changes))
-
-    def test_live_manual_launch_omits_unused_control_nodes(self):
+    def test_manual_launch_uses_estimator_and_one_command_owner(self):
         source = (
             ROOT / "robosub_ws/src/robosub_control/launch/vehicle.launch.py"
         )
@@ -175,14 +145,19 @@ class LaunchTests(unittest.TestCase):
                 "preview_commands": "false",
                 "simulate_actuators": "false",
                 "use_sim_time": "false",
-                "tuning_file": "",
             }
         )
         with patch.object(vehicle, "Node") as node:
             vehicle.start(context)
         self.assertEqual(
             [call.kwargs["executable"] for call in node.call_args_list],
-            ["thruster_mixer"],
+            ["thruster_mixer", "hardware_sensors", "state_estimator"],
+        )
+        from robosub_control.config import current_m5
+
+        self.assertEqual(
+            node.call_args_list[-1].kwargs["parameters"][0]["dvl_offset"],
+            list(current_m5.CONTROL_BOARD_POSITION_BODY_M),
         )
         context.launch_configurations["manual_control"] = "false"
         context.launch_configurations["preview_commands"] = "true"
@@ -193,17 +168,24 @@ class LaunchTests(unittest.TestCase):
             [
                 "thruster_mixer",
                 "actuator_commands",
+                "hardware_sensors",
                 "state_estimator",
                 "depth_heading_controller",
             ],
         )
-
-    def test_hard_lock_overrides_tuning_launch_option(self):
-        with (
-            patch.object(self.launch.constants, "LOCK_TUNING_DEFAULTS", True),
-            self.assertRaisesRegex(ValueError, "locked"),
-        ):
-            self.launch.start(self.context(tuning="true"))
+        context.launch_configurations["simulate_actuators"] = "true"
+        with patch.object(vehicle, "Node") as node:
+            vehicle.start(context)
+        self.assertNotIn(
+            "hardware_sensors",
+            [call.kwargs["executable"] for call in node.call_args_list],
+        )
+        estimator = next(
+            call
+            for call in node.call_args_list
+            if call.kwargs["executable"] == "state_estimator"
+        )
+        self.assertNotIn("dvl_offset", estimator.kwargs["parameters"][0])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RoboSub driver station</title>
+<style>
+body { font: 14px monospace; margin: 20px; }
+pre { white-space: pre-wrap; }
+</style>
+<h1>RoboSub driver station</h1>
+<p id="gamepad-disabled">Controller input is disabled for this run.</p>
+<section id="gamepad" hidden>
+<h2>Xbox controller</h2>
+<p id="gamepad-mode"></p>
+<p>Left stick: forward/back and strafe. Right stick: turn and up/down.
+RT rolls right; LT rolls left. RB is unused.
+Click Enable to use the inputs, and Disable to stop.</p>
+<p>Hold A: forward 1 m, then hold position/depth. Hold B: hold depth.
+Hold X: 0.5 m deeper. Hold Y: turn 90° clockwise and hold heading/depth.
+Release to end a maneuver. Stick or trigger input takes over immediately.
+Assistance needs fresh sensor feedback; A also needs DVL position.</p>
+<div id="gamepad-browser">
+<label>Controller <select id="gamepad-device"></select></label>
+</div>
+<button id="gamepad-enable">Enable controller input</button>
+<button id="gamepad-stop">Disable controller input</button>
+<pre id="gamepad-status" role="status">Connecting...</pre>
+<pre id="gamepad-preview">Waiting for robot commands...</pre>
+</section>
+<script>
+const token = "__TOKEN__";
+async function request(path, options = {}) {
+  const response = await fetch(path, options);
+  const data = await response.json();
+  if (!response.ok) throw Error(data.error || response.statusText);
+  return data;
+}
+</script>
+<script src="/gamepad.js"></script>
+</html>

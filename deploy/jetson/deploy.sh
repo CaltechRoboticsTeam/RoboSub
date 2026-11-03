@@ -1,12 +1,37 @@
 #!/usr/bin/env bash
 # Create a reviewable release; leave existing robot programs and checkouts alone.
+# Remote commands intentionally receive the validated local path and boolean.
+# shellcheck disable=SC2029
 set -euo pipefail
-if [[ $# -ne 1 ]]; then
-  echo "Usage: $0 user@jetson" >&2
+
+usage() {
+  echo "Usage: $0 [--deploy-anyway] user@jetson"
+  echo "Tests always run; --deploy-anyway allows activation if they fail."
+}
+
+field_target=""
+field_deploy_anyway=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --deploy-anyway) field_deploy_anyway=true ;;
+    -h|--help) usage; exit 0 ;;
+    -*) usage >&2; exit 2 ;;
+    *)
+      if [[ -n "${field_target}" ]]; then
+        usage >&2
+        exit 2
+      fi
+      field_target="$1"
+      ;;
+  esac
+  shift
+done
+if [[ -z "${field_target}" ]]; then
+  usage >&2
   exit 2
 fi
-field_target="$1"
 field_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+printf 'Control test sources on this Mac: %s/tests/control\n' "${field_root}"
 field_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 field_revision="$(git -C "${field_root}" rev-parse --short=10 HEAD)"
 field_stage="$(mktemp -d "${TMPDIR:-/tmp}/robosub-deploy.XXXXXX")"
@@ -117,22 +142,88 @@ for process in Path('/proc').iterdir():
     except (OSError, UnicodeError):
         continue
 PY_DOMAIN
+printf 'Running tests from: %s/tests/control\n' "${field_release}"
+printf 'Saving test output to: %s/control-tests.log\n' "${field_release}"
+set +e
 ROS_DOMAIN_ID=198 ROS_LOCALHOST_ONLY=1 \
-  python3 -m unittest discover -s tests/control -v
-python3 - "${field_release}" <<'PY'
+  python3 -m unittest discover -s tests/control -v 2>&1 \
+  | tee "${field_release}/control-tests.log"
+field_test_results=("${PIPESTATUS[@]}")
+set -e
+if [[ "${field_test_results[1]}" -ne 0 ]]; then
+  exit "${field_test_results[1]}"
+fi
+python3 - "${field_release}" "${field_test_results[0]}" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+report = {
+    'test_exit_code': int(sys.argv[2]),
+    'test_failures_overridden': False,
+    'test_log': 'control-tests.log',
+}
+(Path(sys.argv[1]) / 'DEPLOYMENT.json').write_text(
+    json.dumps(report, indent=2) + '\n')
+PY
+SH_REMOTE
+
+ssh "${field_ssh[@]}" "${field_target}" \
+  "cat '${field_remote}/DEPLOYMENT.json'" > "${field_stage}/DEPLOYMENT.json"
+field_test_status="$(python3 - "${field_stage}/DEPLOYMENT.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1]) as source:
+    print(json.load(source)['test_exit_code'])
+PY
+)"
+if [[ "${field_test_status}" -ne 0 ]]; then
+  printf 'Tests FAILED (exit %s). Full log: %s:%s/control-tests.log\n' \
+    "${field_test_status}" "${field_target}" "${field_remote}"
+  if [[ "${field_deploy_anyway}" != true ]]; then
+    field_answer=""
+    if [[ -t 0 ]]; then
+      read -r -p 'Deploy this built release anyway? [y/N] ' field_answer || true
+    fi
+    case "${field_answer}" in
+      [yY]|[yY][eE][sS]) field_deploy_anyway=true ;;
+      *)
+        echo "Not deployed; the current release is unchanged." >&2
+        echo "Use --deploy-anyway to accept failed tests non-interactively." >&2
+        exit 1
+        ;;
+    esac
+  fi
+  echo "Deploying with failed tests explicitly accepted."
+fi
+
+ssh "${field_ssh[@]}" "${field_target}" \
+  "bash -s -- '${field_remote}' '${field_deploy_anyway}'" <<'SH_ACTIVATE'
+set -euo pipefail
+field_release="$1"
+python3 - "${field_release}" "$2" <<'PY'
+import json
 import os
 from pathlib import Path
 import sys
 
 release = Path(sys.argv[1])
+report_path = release / 'DEPLOYMENT.json'
+report = json.loads(report_path.read_text())
+override = sys.argv[2] == 'true' and report['test_exit_code'] != 0
+if report['test_exit_code'] != 0 and not override:
+    raise SystemExit('Failed tests were not accepted; refusing activation')
 current = release.parents[1] / 'current'
 if current.exists() and not current.is_symlink():
     raise SystemExit('Refusing to replace a non-symlink current path')
+report['test_failures_overridden'] = override
+report_path.write_text(json.dumps(report, indent=2) + '\n')
 temporary = current.with_name('current-' + release.name)
 os.symlink(release, temporary)
 os.replace(temporary, current)
 print('Current release:', current, '->', release)
 print('No robot programs were started or restarted.')
 PY
-SH_REMOTE
+SH_ACTIVATE
 printf 'Field tools: %s/field.sh\n' "${field_remote}"

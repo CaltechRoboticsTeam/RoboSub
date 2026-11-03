@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "source_url": "https://download.videoray.com/documentation/m5_thruster/images/thruster_output.png",
+  "source_sha256": "2df7a2eabd84af031162f968b4dff6ac195c775d6bfb71b8c4e51a60aaa9efae",
+  "specification_url": "https://download.videoray.com/documentation/m5_thruster/html/specifications.html",
+  "source_test_voltage_v": null,
+  "assumed_simulation_voltage_v": 48.0,
+  "digitization": {
+    "method": "Approximate blue marker centers from the manufacturer PNG; power rounded to 5 W and thrust to 0.05 kgf.",
+    "image_size_px": [586, 386],
+    "plot_axes_px": {"power_zero_x": 61, "power_600w_x": 461, "thrust_zero_y": 326, "thrust_12kgf_y": 50},
+    "warning": "These are digitized graph estimates, not a manufacturer CSV or measured command calibration."
+  },
+  "assumptions": {
+    "voltage": "Fixed 48 V, based on the module specification. The chart does not label its test voltage.",
+    "command": "Normalized command magnitude approximates shaft speed; electrical power scales with command magnitude cubed.",
+    "power_limit": "570 W default is the specification maximum, not a readback of the installed motor power-manager setting.",
+    "reverse": "Default reverse thrust mirrors forward; the stock propeller is forward optimized and reverse data is unavailable.",
+    "low_power": "Below the first chart point, extrapolate thrust proportional to electrical power to the 2/3 power.",
+    "dynamics": "Steady static thrust; no measured startup, battery sag or advance-speed correction."
+  },
+  "power_w_thrust_kgf": [
+    [25, 1.50], [50, 2.40], [75, 3.25], [100, 3.90],
+    [125, 4.50], [150, 5.10], [175, 5.75], [195, 6.10],
+    [225, 6.60], [255, 7.05], [275, 7.45], [295, 7.75],
+    [325, 8.10], [355, 8.55], [375, 8.75], [400, 9.00],
+    [425, 9.40], [450, 9.65], [480, 9.85], [495, 10.10],
+    [525, 10.25], [550, 10.50], [570, 10.80]
+  ]
+}
