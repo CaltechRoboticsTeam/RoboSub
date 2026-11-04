@@ -11,7 +11,6 @@ import termios
 import time
 
 from robosub_control.config import current_m5
-
 from robosub_control.drivers.videoray import BusDiagnostics
 
 DEVICE = "/dev/serial/by-id/usb-Teensyduino_USB_Serial_19620450-if00"
@@ -75,7 +74,7 @@ def decode_frame(line):
         raise ValueError("Invalid USB response encoding") from exc
     if binascii.crc32(body) != expected:
         raise ValueError("USB response CRC mismatch")
-    lengths = {"I1": 7, "A1": 6, "F1": 3, "D1": 5, "R1": 4}
+    lengths = {"I1": 7, "A1": 6, "F1": 3, "D1": 5, "R1": 4, "K1": 3}
     if len(fields) != lengths.get(fields[0]):
         raise ValueError("USB response fields do not match the protocol")
     return fields
@@ -101,7 +100,7 @@ def depth_sample(fields):
         raise ValueError("Invalid USB depth response")
     adc = int(fields[1])
     value = float(fields[2])
-    if adc < 0 or not math.isfinite(value):
+    if not 0 <= adc <= 0x7FFF_FFFF or not math.isfinite(value):
         raise ValueError("Invalid pressure sensor value")
     return {
         "adc": adc,
@@ -185,7 +184,8 @@ class TeensyUsb:
                         self.on_depth(fields)
                     continue
                 if fields[0] == "R1":
-                    self.bus.capture(fields)
+                    if int(fields[1]) == self.session:
+                        self.bus.capture(fields)
                     continue
                 if fields[0] == "F1":
                     raise RuntimeError("Teensy stopped: " + ",".join(fields))
@@ -210,7 +210,7 @@ class TeensyUsb:
     def connect(self):
         self._write(encode_frame("H1", self.session))
         fields = self._wait("I1", timeout=2.0)
-        if int(fields[2]) not in (1, 2) or tuple(map(int, fields[3:5])) != (
+        if int(fields[2]) not in (1, 2, 3) or tuple(map(int, fields[3:5])) != (
             SLOTS,
             WATCHDOG_MS,
         ):
@@ -255,6 +255,17 @@ class TeensyUsb:
             "rs485_response_bytes": int(fields[5]),
         }
         return self.last_ack
+
+    def query_motor_id(self, node):
+        """Read the motor ordinal; leave power and watchdog state unchanged."""
+        if self.info is None or self.info["protocol_version"] < 3:
+            raise ValueError("Motor identity reads require firmware v3")
+        if type(node) is not int or not 0 <= node <= 127:
+            raise ValueError("Expected an individual network node ID")
+        self._write(encode_frame("Q1", self.session, node))
+        fields = self._wait("K1")
+        if int(fields[2]) != node:
+            raise ValueError("Teensy acknowledged a different identity read")
 
     def close(self):
         if self.fd is not None:

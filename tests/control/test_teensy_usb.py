@@ -1,10 +1,8 @@
 """Firmware parser, VideoRay CRC and USB transport diagnostics."""
 
 import binascii
-from contextlib import redirect_stdout
 import io
 import os
-from pathlib import Path
 import pty
 import select
 import shutil
@@ -13,8 +11,10 @@ import subprocess
 import sys
 import tempfile
 import threading
-from types import SimpleNamespace
 import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -157,6 +157,27 @@ class FirmwareTests(unittest.TestCase):
                 self.assertEqual(rows[-1][0], "0")
                 self.assertEqual(rows[-1][3:12], ["0"] + ["1500"] * 8)
 
+    def test_identity_read_preserves_power_and_does_not_renew_watchdog(self):
+        rows = self.run_frames(
+            (0, encode_frame("H1", 42)),
+            (1, command(42, 1)),
+            (2, command(42, 2, True, 25)),
+            (200, encode_frame("Q1", 42, 127)),
+            (252, b"TICK"),
+        )
+        self.assertEqual(rows[3][0], "3")
+        self.assertEqual(rows[3][1:12], rows[2][1:12])
+        self.assertEqual(rows[4][3:12], ["0"] + ["1500"] * 8)
+        for node in (-1, 128):
+            rows = self.run_frames(
+                (0, encode_frame("H1", 42)),
+                (1, command(42, 1)),
+                (2, command(42, 2, True, 25)),
+                (3, encode_frame("Q1", 42, node)),
+            )
+            self.assertEqual(rows[-1][0], "0")
+            self.assertEqual(rows[-1][3:12], ["0"] + ["1500"] * 8)
+
 
 class UsbTransportTests(unittest.TestCase):
     def transport(self, mode):
@@ -184,12 +205,14 @@ class UsbTransportTests(unittest.TestCase):
                             response = encode_frame(
                                 "I1",
                                 body[1],
-                                1,
+                                3 if mode == "v3" else 1,
                                 8,
                                 250,
                                 25,
                                 1,
                             )
+                        elif body[0] == "Q1":
+                            response = encode_frame("K1", body[1], body[2])
                         elif mode == "timeout" and body[2] == "2":
                             continue
                         else:
@@ -217,8 +240,12 @@ class UsbTransportTests(unittest.TestCase):
             self.assertEqual(bridge.connect()["watchdog_ms"], 250)
             with self.assertRaises(OSError):
                 TeensyUsb(device)
-            if mode == "ok":
+            if mode in ("ok", "v3"):
                 bridge.command([1525] + [1500] * 7, enabled=True)
+                if mode == "v3":
+                    sequence = bridge.sequence
+                    bridge.query_motor_id(29)
+                    self.assertEqual(bridge.sequence, sequence)
             else:
                 with self.assertRaises((TimeoutError, RuntimeError)):
                     bridge.command([1525] + [1500] * 7, enabled=True)
@@ -238,6 +265,9 @@ class UsbTransportTests(unittest.TestCase):
 
     def test_missing_ack_does_not_count_as_success(self):
         self.transport("timeout")
+
+    def test_v3_identity_query_has_its_own_acknowledgment(self):
+        self.transport("v3")
 
     def test_missing_motor_reply_blocks_every_nonneutral_attempt(self):
         from diagnostics.teensy_test import main
@@ -289,6 +319,31 @@ def status_packet(node=1, fault=0, rpm=0.0):
 
 
 class VideoRayTests(unittest.TestCase):
+    def test_motor_assignment_is_read_independently_of_node_address(self):
+        bus = BusDiagnostics()
+        header = struct.pack("<HBBBB", 0x0FF0, 29, 0x80, 0x4C, 3)
+        payload = struct.pack("<BH", 0x81, 6)
+        identity = (
+            header
+            + struct.pack("<I", binascii.crc32(header))
+            + payload
+            + struct.pack("<I", binascii.crc32(payload))
+        )
+        bus.feed(identity[:-1] + bytes([identity[-1] ^ 1]))
+        self.assertEqual(bus.motor_ids, {})
+        bus.feed(identity)
+        packet = bytearray(status_packet(node=29))
+        packet[10] = 0x81
+        packet[-4:] = struct.pack("<I", binascii.crc32(packet[10:-4]))
+        with patch("time.monotonic", return_value=10.0):
+            bus.feed(packet)
+        with patch("time.monotonic", return_value=12.0):
+            status = bus.motor_statuses()[0]
+        self.assertEqual(status["node_id"], 29)
+        self.assertEqual(status["motor_id"], 6)
+        self.assertEqual(status["bus_voltage_v"], 24.0)
+        self.assertEqual(status["age_s"], 2.0)
+
     def test_split_frames_decode_voltage_and_fault(self):
         packet = status_packet()
         self.assertEqual(len(packet), 32)

@@ -1,12 +1,12 @@
 """Exercise real-message adaptation without opening any hardware device."""
 
-from copy import deepcopy
 import math
 import os
-from pathlib import Path
 import sys
 import time
 import unittest
+from copy import deepcopy
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -140,7 +140,7 @@ class HardwareSensorTests(unittest.TestCase):
         self.node.on_usb_depth(Float64(data=1.6))
         self.assertEqual(self.node.active_depth_source, "usb")
 
-    def test_teensy_depth_callback_drops_low_adc_and_malformed_values(self):
+    def test_teensy_publishes_raw_adc_even_when_depth_is_unavailable(self):
         from robosub_control.drivers.teensy_actuators import TeensyActuators
 
         with patch(
@@ -156,20 +156,109 @@ class HardwareSensorTests(unittest.TestCase):
                 bridge.call_args.kwargs["on_depth"], driver.on_depth
             )
             driver.depth_pub = Mock()
+            driver.pressure_adc_pub = Mock()
             for fields in (
                 ["D1", "0", "1.0", "0", "0"],
                 ["D1", "1", "1.0", "0", "0"],
+            ):
+                driver.on_depth(fields)
+            self.assertEqual(
+                [
+                    call.args[0].data
+                    for call in driver.pressure_adc_pub.publish.call_args_list
+                ],
+                [0, 1],
+            )
+            for fields in (
+                ["D1", "-1", "1.0", "0", "0"],
+                ["D1", "2147483648", "1.0", "0", "0"],
                 ["D1", "400", "nan", "0", "0"],
                 ["D1", "400", "1.0", "bad", "0"],
             ):
                 driver.on_depth(fields)
+            self.assertEqual(driver.pressure_adc_pub.publish.call_count, 2)
             driver.depth_pub.publish.assert_not_called()
             driver.on_depth(["D1", "410", "1.25", "0", "0"])
+            self.assertEqual(
+                driver.pressure_adc_pub.publish.call_args.args[0].data, 410
+            )
             self.assertEqual(
                 driver.depth_pub.publish.call_args.args[0].data, 1.25
             )
         finally:
             driver.destroy_node()
+
+    def test_diagnostics_do_not_infer_motors_or_pixhawk_from_usb_ack(self):
+        import json
+
+        from robosub_control.drivers.hardware_diagnostics import (
+            HardwareDiagnostics,
+        )
+        from std_msgs.msg import String
+
+        diagnostics = HardwareDiagnostics()
+        self.addCleanup(diagnostics.destroy_node)
+        diagnostics.publisher = Mock()
+        with patch("time.monotonic", return_value=10.0):
+            diagnostics.on_sample(
+                "teensy",
+                String(
+                    data=json.dumps(
+                        {
+                            "firmware": {"protocol_version": 1},
+                            "ack": {"sequence": 20},
+                            "ack_age_s": 0.1,
+                        }
+                    )
+                ),
+            )
+            diagnostics.periodic()
+        rows = {
+            row.name.split("/")[-1]: row
+            for row in diagnostics.publisher.publish.call_args.args[0].status
+        }
+        self.assertEqual(rows["Teensy"].level, bytes([0]))
+        self.assertEqual(rows["Pixhawk"].level, bytes([3]))
+        for name in ("FR", "FL", "BR", "BL", "RD", "LD"):
+            self.assertEqual(rows[f"Thruster {name}"].level, bytes([3]))
+        with patch("time.monotonic", return_value=12.0):
+            diagnostics.periodic()
+        rows = {
+            row.name.split("/")[-1]: row
+            for row in diagnostics.publisher.publish.call_args.args[0].status
+        }
+        self.assertEqual(rows["Teensy"].level, bytes([3]))
+
+    def test_motor_diagnostics_use_identity_freshness_faults_and_duplicates(
+        self,
+    ):
+        from robosub_control.drivers.hardware_diagnostics import (
+            HardwareDiagnostics,
+        )
+
+        diagnostics = HardwareDiagnostics()
+        self.addCleanup(diagnostics.destroy_node)
+        motor = {"node_id": 29, "motor_id": 6, "age_s": 0.5, "fault": 0}
+        bridge = {"firmware": {"protocol_version": 3}, "motors": [motor]}
+
+        def ld():
+            return next(
+                row
+                for row in diagnostics.motor_statuses(bridge)
+                if row.name.endswith("Thruster LD")
+            )
+
+        self.assertEqual(ld().level, bytes([0]))
+        self.assertIn("29", [item.value for item in ld().values])
+        motor["fault"] = 4
+        self.assertEqual(ld().level, bytes([2]))
+        motor["fault"] = 0
+        motor["age_s"] = 16.0
+        self.assertEqual(ld().level, bytes([3]))
+        motor["age_s"] = 0.5
+        bridge["motors"].append({**motor, "node_id": 30})
+        self.assertIn("Duplicate", ld().message)
+        self.assertEqual(ld().level, bytes([2]))
 
     def test_best_effort_hardware_messages_reach_reliable_estimator(self):
         from nav_msgs.msg import Odometry

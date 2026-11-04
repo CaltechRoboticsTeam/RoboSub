@@ -1,22 +1,25 @@
 """Serve the loopback Xbox driver station and command preview."""
 
 import errno
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-from pathlib import Path
 import secrets
 import subprocess
 import sys
 import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
-from ament_index_python.packages import get_package_share_directory
 import rclpy
+from ament_index_python.packages import get_package_share_directory
+from diagnostic_msgs.msg import DiagnosticArray
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from robosub_control.utils.tuning import fixed_parameter
 
-from robosub_bringup.operator_panel import OperatorPanel
 from robosub_bringup.mac_gamepad import MacGamepad
+from robosub_bringup.operator_panel import OperatorPanel
 
 
 class DriverStation(Node):
@@ -26,9 +29,51 @@ class DriverStation(Node):
         if type(self.port) is not int or not 1 <= self.port <= 65535:
             raise ValueError("port must be an integer between 1 and 65535")
         self.operator = OperatorPanel(self)
+        self.diagnostics_lock = threading.Lock()
+        self.diagnostics = []
+        self.diagnostics_received = None
+        self.create_subscription(
+            DiagnosticArray,
+            "/diagnostics",
+            self.on_diagnostics,
+            qos_profile_sensor_data,
+        )
+
+    def on_diagnostics(self, message):
+        prefix = "sub/Diagnostics/"
+        rows = [
+            {
+                "name": status.name.removeprefix(prefix),
+                "level": status.level[0],
+                "message": status.message,
+                "values": {item.key: item.value for item in status.values},
+            }
+            for status in message.status
+            if status.name.startswith(prefix)
+        ]
+        if rows:
+            with self.diagnostics_lock:
+                self.diagnostics = rows
+                self.diagnostics_received = time.monotonic()
+
+    def diagnostics_snapshot(self):
+        with self.diagnostics_lock:
+            age = (
+                time.monotonic() - self.diagnostics_received
+                if self.diagnostics_received is not None
+                else None
+            )
+            return {"rows": self.diagnostics, "age_s": age}
 
 
-def make_handler(station, html, token, gamepad_script="", native_gamepad=None):
+def make_handler(
+    station,
+    html,
+    token,
+    gamepad_script="",
+    native_gamepad=None,
+    diagnostics_script="",
+):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, _format, *args):
             pass
@@ -50,6 +95,10 @@ def make_handler(station, html, token, gamepad_script="", native_gamepad=None):
                 self.respond(200, html.replace("__TOKEN__", token), "text/html")
             elif self.path == "/gamepad.js":
                 self.respond(200, gamepad_script, "text/javascript")
+            elif self.path == "/diagnostics.js":
+                self.respond(200, diagnostics_script, "text/javascript")
+            elif self.path == "/api/diagnostics":
+                self.respond(200, station.diagnostics_snapshot())
             elif self.path == "/api/gamepad":
                 data = station.operator.snapshot()
                 data["native_controller"] = native_gamepad is not None
@@ -117,6 +166,7 @@ def main():
             secrets.token_urlsafe(32),
             (share / "web/gamepad.js").read_text(),
             native_gamepad,
+            diagnostics_script=(share / "web/diagnostics.js").read_text(),
         )
         with ThreadingHTTPServer(("127.0.0.1", node.port), handler) as server:
             node.get_logger().info(

@@ -1,10 +1,10 @@
 """Bounded decoding of captured VideoRay packets; never opens a bus."""
 
 import binascii
-from collections import deque
 import math
 import struct
 import time
+from collections import deque
 
 REQUEST_SYNC = b"\xf5\x5f"
 RESPONSE_SYNC = b"\xf0\x0f"
@@ -27,6 +27,8 @@ class BusDiagnostics:
         self.invalid_status_payloads = 0
         self.statuses = deque(maxlen=8)
         self.status_time = None
+        self.nodes = {}
+        self.motor_ids = {}
 
     def capture(self, fields):
         if len(fields) != 4 or fields[0] != "R1":
@@ -90,7 +92,16 @@ class BusDiagnostics:
                 self.echoed_requests += 1
                 continue
             self.valid_responses += 1
-            if packet[4] != 0xF0 or len(payload) != 18:
+            node = packet[2]
+            if node > 127:
+                continue
+            if packet[3:5] == b"\x80\x4c" and len(payload) == 3:
+                if payload[0] == 0x81:
+                    self.motor_ids[node] = struct.unpack_from("<H", payload, 1)[
+                        0
+                    ]
+                continue
+            if packet[3:5] != b"\x02\xf0" or len(payload) != 18:
                 continue
             device, rpm, voltage, current, temperature, fault = struct.unpack(
                 "<BffffB", payload
@@ -101,19 +112,32 @@ class BusDiagnostics:
             ):
                 self.invalid_status_payloads += 1
                 continue
-            self.statuses.append(
-                {
-                    "node_id": packet[2],
-                    "flag": packet[3],
-                    "device_type": device,
-                    "rpm": rpm,
-                    "bus_voltage_v": voltage,
-                    "bus_current_a": current,
-                    "temperature_c": temperature,
-                    "fault": fault,
-                }
-            )
+            status = {
+                "node_id": packet[2],
+                "flag": packet[3],
+                "device_type": device,
+                "rpm": rpm,
+                "bus_voltage_v": voltage,
+                "bus_current_a": current,
+                "temperature_c": temperature,
+                "fault": fault,
+            }
+            self.statuses.append(status)
             self.status_time = time.monotonic()
+            if device == 0x81:
+                self.nodes[node] = (self.status_time, status)
+
+    def motor_statuses(self):
+        """Return observed identities; a node address is not a motor slot."""
+        now = time.monotonic()
+        return [
+            {
+                **status,
+                "age_s": now - received,
+                "motor_id": self.motor_ids.get(node),
+            }
+            for node, (received, status) in sorted(self.nodes.items())
+        ]
 
     def require_feedback(self, maximum_age=2.0):
         if self.status_time is None:

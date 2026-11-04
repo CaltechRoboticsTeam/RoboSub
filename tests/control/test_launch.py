@@ -2,10 +2,10 @@
 
 import importlib.util
 import json
-from pathlib import Path
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -130,7 +130,15 @@ class LaunchTests(unittest.TestCase):
                     actuators="teensy_usb",
                 )
             )
-        self.assertEqual(len(actions), 6)
+        self.assertEqual(len(actions), 7)
+        self.assertEqual(
+            sum(
+                action.node_executable == "hardware_diagnostics"
+                for action in actions
+                if isinstance(action, self.launch.Node)
+            ),
+            1,
+        )
 
     def test_manual_launch_uses_estimator_and_one_command_owner(self):
         source = (

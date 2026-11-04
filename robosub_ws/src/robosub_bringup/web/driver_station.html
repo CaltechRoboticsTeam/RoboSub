@@ -6,6 +6,9 @@
 <style>
 body { font: 14px monospace; margin: 20px; }
 pre { white-space: pre-wrap; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #888; padding: 8px; text-align: left; }
+td { vertical-align: top; }
 </style>
 <h1>RoboSub driver station</h1>
 <p id="gamepad-disabled">Controller input is disabled for this run.</p>
@@ -33,6 +36,16 @@ Sticks/triggers or Disable end measurement. Drag also needs DVL feedback.</p>
 <pre id="gamepad-status" role="status">Connecting...</pre>
 <pre id="gamepad-preview">Waiting for robot commands...</pre>
 </section>
+<section>
+<h2>Diagnostics</h2>
+<p id="diagnostics-status" role="status">Waiting for ROS diagnostics...</p>
+<p>USB ACK confirms Teensy receipt. Motor rows require a checksum-valid M5
+reply and a read of its stored motor ID. Voltage does not prove rotation.</p>
+<table>
+<thead><tr><th>Device</th><th>Status</th><th>Evidence</th></tr></thead>
+<tbody id="diagnostics-rows"></tbody>
+</table>
+</section>
 <script>
 const token = "__TOKEN__";
 async function request(path, options = {}) {
@@ -43,4 +56,5 @@ async function request(path, options = {}) {
 }
 </script>
 <script src="/gamepad.js"></script>
+<script src="/diagnostics.js"></script>
 </html>

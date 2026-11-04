@@ -37,6 +37,8 @@ setup(
             "xbox_teleop = robosub_control.teleop.xbox_teleop:main",
             "teensy_actuators = robosub_control.drivers.teensy_actuators:main",
             "hardware_sensors = robosub_control.drivers.hardware_sensors:main",
+            "hardware_diagnostics = "
+            "robosub_control.drivers.hardware_diagnostics:main",
         ]
     },
 )

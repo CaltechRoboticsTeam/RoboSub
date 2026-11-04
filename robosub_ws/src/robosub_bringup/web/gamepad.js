@@ -112,7 +112,7 @@
   async function controllerInput(pad, signal) {
     const firefoxMac = /Firefox\//.test(navigator.userAgent) &&
       /Mac/.test(navigator.platform);
-    if (firefoxMac && pad.id.toLowerCase().startsWith("045e-02fd-")) {
+    if (firefoxMac && /^045e-(02fd|028e)-/i.test(pad.id)) {
       // Gecko drops this model's trigger axes before exposing the gamepad.
       const path = settings.native_controller ? "/api/controller" :
         "http://127.0.0.1:8767/api/controller";
@@ -126,8 +126,15 @@
         throw Error("Start the Mac controller reader on your Mac: " +
           "ros2 run robosub_bringup mac_gamepad");
       }
-      const input = frame.controller;
-      if (!input || input.id !== pad.id) {
+      const deviceId = id => id.toLowerCase().split("-").slice(0, 2).join("-");
+      const inputs = frame.controllers || [frame.controller].filter(Boolean);
+      const matches = inputs.filter(
+        item => deviceId(item.id) === deviceId(pad.id));
+      if (matches.length > 1) {
+        throw Error("More than one Mac controller of this model is connected");
+      }
+      const input = matches[0];
+      if (!input) {
         throw Error(frame.error || "Waiting for the Mac Xbox controller");
       }
       return {axes: input.axes, buttons: input.buttons};

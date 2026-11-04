@@ -2,8 +2,8 @@
 
 import errno
 import math
-from pathlib import Path
 import socket
+from pathlib import Path
 
 from ament_index_python.packages import (
     PackageNotFoundError,
@@ -181,6 +181,15 @@ def start(context):
                     "config": config,
                     "use_sim_time": "false",
                 },
+            )
+        )
+    if not simulated:
+        actions.append(
+            Node(
+                package="robosub_control",
+                executable="hardware_diagnostics",
+                output="screen",
+                parameters=[{"use_sim_time": False}],
             )
         )
     if mission:

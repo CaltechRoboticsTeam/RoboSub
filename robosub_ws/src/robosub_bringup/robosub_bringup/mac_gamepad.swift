@@ -3,8 +3,14 @@ import IOKit.hid
 
 let manager = IOHIDManagerCreate(
   kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
-let matching = [kIOHIDVendorIDKey: 0x045e, kIOHIDProductIDKey: 0x02fd]
-IOHIDManagerSetDeviceMatching(manager, matching as CFDictionary)
+let matching = [
+  [kIOHIDVendorIDKey: 0x045e, kIOHIDProductIDKey: 0x02fd],
+  [
+    kIOHIDVendorIDKey: 0x045e, kIOHIDProductIDKey: 0x028e,
+    kIOHIDTransportKey: "USB",
+  ] as [String: Any],
+]
+IOHIDManagerSetDeviceMatchingMultiple(manager, matching as CFArray)
 IOHIDManagerScheduleWithRunLoop(
   manager, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
 
@@ -38,11 +44,8 @@ func value(
   return trigger ? unit : 2 * unit - 1
 }
 
-func controller() -> [String: Any]? {
+func controller(_ device: IOHIDDevice) -> [String: Any]? {
   guard
-    let devices = IOHIDManagerCopyDevices(manager)
-      as? Set<IOHIDDevice>, devices.count == 1,
-    let device = devices.first,
     let elements = IOHIDDeviceCopyMatchingElements(
       device, nil, IOOptionBits(kIOHIDOptionsTypeNone))
       as? [IOHIDElement]
@@ -53,20 +56,26 @@ func controller() -> [String: Any]? {
     let usage = IOHIDElementGetUsage(element)
     inputs["\(page):\(usage)"] = element
   }
-  // This controller's HID descriptor exposes LT/RT as Brake/Accelerator.
-  let axes = ["1:48", "1:49", "1:50", "1:53", "2:197", "2:196"]
+  let product = IOHIDDeviceGetProperty(
+    device, kIOHIDProductIDKey as CFString) as? Int
+  let wired = product == 0x028e
+  // The wired descriptor uses Ry/Rx for right X/Y and Z/Rz for triggers.
+  let axes = wired
+    ? ["1:48", "1:49", "1:52", "1:51", "1:50", "1:53"]
+    : ["1:48", "1:49", "1:50", "1:53", "2:197", "2:196"]
   var values: [Double] = []
   for (index, key) in axes.enumerated() {
     guard let element = inputs[key],
       let number = value(device, element, trigger: index >= 4)
     else { return nil }
-    values.append(number)
+    let invert = wired && (index == 1 || index == 3)
+    values.append(invert ? -number : number)
   }
   var buttons: [Int] = []
-  // Xbox reserves button 3; View is Consumer AC Back (0x224).
-  let buttonKeys = [
-    "9:1", "9:2", "9:4", "9:5", "9:7", "9:8", "12:548", "9:12",
-  ]
+  // The two descriptors assign different button usages to the same controls.
+  let buttonKeys = wired
+    ? ["9:1", "9:2", "9:3", "9:4", "9:5", "9:6", "9:10", "9:9"]
+    : ["9:1", "9:2", "9:4", "9:5", "9:7", "9:8", "12:548", "9:12"]
   for key in buttonKeys {
     guard let element = inputs[key],
       let number = value(device, element, trigger: true)
@@ -74,7 +83,9 @@ func controller() -> [String: Any]? {
     buttons.append(number > 0.5 ? 1 : 0)
   }
   return [
-    "id": "045e-02fd-Xbox Wireless Controller",
+    "id": wired
+      ? "045e-028e-Xbox USB Controller"
+      : "045e-02fd-Xbox Wireless Controller",
     "axes": values, "buttons": buttons,
   ]
 }
@@ -88,7 +99,18 @@ guard result == kIOReturnSuccess else {
   exit(1)
 }
 let timer = Timer(timeInterval: 0.05, repeats: true) { _ in
-  emit(["controller": controller() as Any? ?? NSNull()])
+  let devices = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice> ?? []
+  let frames = devices.compactMap { controller($0) }
+  var frame: [String: Any] = [
+    "controllers": frames,
+    "controller": frames.count == 1 ? frames[0] : NSNull(),
+  ]
+  if frames.isEmpty {
+    frame["error"] = devices.isEmpty
+      ? "No supported Xbox controller detected on this Mac"
+      : "Xbox detected, but required axes or buttons could not be read"
+  }
+  emit(frame)
 }
 RunLoop.current.add(timer, forMode: .default)
 RunLoop.current.run()

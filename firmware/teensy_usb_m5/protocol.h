@@ -58,14 +58,15 @@ inline void WriteUint32(uint8_t* output, uint32_t value) {
   }
 }
 
-inline void MakePacket(const uint16_t (&pwm)[kSlots], uint8_t* output) {
+inline void MakePacket(const uint16_t (&pwm)[kSlots], uint8_t* output,
+                       uint8_t reply_node = 1) {
   static_assert(sizeof(float) == 4, "VideoRay requires 32-bit floats");
-  // Preserve group 0x81 and reply node 1 from the supplied installed sketch.
+  // Group and power slots follow the installed sketch; node IDs are separate.
   const uint8_t header[] = {0xf5, 0x5f, 0x81, 0x02, 0xf0, 34};
   memcpy(output, header, sizeof(header));
   WriteUint32(output + 6, Crc32(output, 6));
   output[10] = 0xaa;
-  output[11] = 0x01;
+  output[11] = reply_node;
   for (size_t i = 0; i < kSlots; ++i) {
     const float power = (static_cast<float>(pwm[i]) - kNeutralUs) / 500.0f;
     uint32_t bits;
@@ -75,7 +76,7 @@ inline void MakePacket(const uint16_t (&pwm)[kSlots], uint8_t* output) {
   WriteUint32(output + 44, Crc32(output + 10, 34));
 }
 
-enum class Accepted { kRejected, kHello, kCommand };
+enum class Accepted { kRejected, kHello, kCommand, kQuery };
 
 class UsbController {
  public:
@@ -116,6 +117,7 @@ class UsbController {
   uint32_t session() const { return session_; }
   uint32_t sequence() const { return sequence_; }
   bool enabled() const { return enabled_; }
+  uint8_t query_node() const { return query_node_; }
 
  private:
   Accepted ParseLine(char* line, uint32_t now_ms) {
@@ -149,6 +151,15 @@ class UsbController {
       session_ = session;
       sequence_ = 0;
       return Accepted::kHello;
+    }
+    if (strcmp(fields[0], "Q1") == 0 && count == 3 && session == session_) {
+      uint32_t node;
+      if (!ParseUint(fields[2], &node) || node > 127) {
+        return Accepted::kRejected;
+      }
+      query_node_ = static_cast<uint8_t>(node);
+      // Reads must not enable outputs or extend the command watchdog.
+      return Accepted::kQuery;
     }
     if (strcmp(fields[0], "C1") != 0 || count != 12 || session != session_) {
       return Accepted::kRejected;
@@ -187,6 +198,7 @@ class UsbController {
   uint32_t last_ms_ = 0;
   bool enabled_ = false;
   bool ready_ = false;
+  uint8_t query_node_ = 0;
 };
 
 }  // namespace robosub
