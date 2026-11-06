@@ -1,11 +1,11 @@
-"""Neutral USB check and explicit, bounded field pulses."""
+"""Check Teensy USB and run motor test pulses."""
 
 import argparse
 import json
 import math
-from pathlib import Path
 import signal
 import time
+from pathlib import Path
 
 from robosub_control.drivers.teensy_usb import (
     DEVICE,
@@ -142,8 +142,6 @@ def main(args=None):
                 "Requested target exceeds the installed firmware limit; "
                 "install the matching higher-limit image first"
             )
-        if options.require_feedback and bridge.info["protocol_version"] < 2:
-            raise ValueError("Pulse requires firmware with M5 reply capture")
         start = time.monotonic()
         while time.monotonic() - start < options.seconds:
             bridge.command([NEUTRAL_US] * SLOTS)
@@ -152,7 +150,7 @@ def main(args=None):
             if options.require_feedback:
                 bridge.bus.require_feedback()
             selected = (
-                "all legacy wire slots"
+                "all USB output slots"
                 if options.all_slots
                 else (f"wire slot {options.slot}; all others neutral")
             )
@@ -227,12 +225,7 @@ def main(args=None):
                 report["neutral_acknowledged"] = False
                 success = False
                 print("Neutral ACK missing; remove propulsion power.")
-            report["capture_supported"] = (
-                bridge.info is not None and bridge.info["protocol_version"] >= 2
-            )
-            report["rs485_diagnostics"] = (
-                bridge.bus.snapshot() if report["capture_supported"] else None
-            )
+            report["rs485_diagnostics"] = bridge.bus.snapshot()
         for signum, handler in previous.items():
             signal.signal(signum, handler)
         report["depth_samples"] = depth_count

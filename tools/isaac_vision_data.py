@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Run with Isaac Sim's python.sh on an NVIDIA workstation, not the Jetson.
-
-Uses Replicator RGB, depth and visible boxes. Shared export records metric
-object poses and projected/occluded landmarks in the actual pinhole camera.
-"""
+"""Generate vision datasets with Isaac Sim on the workstation."""
 
 import argparse
 
@@ -15,6 +11,7 @@ def run(args, application):
     import numpy as np
     import omni.replicator.core as rep
     import omni.usd
+    import trimesh
     from pxr import Gf, Sdf, UsdGeom, UsdLux, UsdShade
     from robosub_vision.synthetic import (
         DatasetWriter,
@@ -22,7 +19,6 @@ def run(args, application):
         random_pose,
         underwater_appearance,
     )
-    import trimesh
 
     scene = load_scene(args.scene)
     writer = DatasetWriter(

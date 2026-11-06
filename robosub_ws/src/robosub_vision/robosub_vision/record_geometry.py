@@ -1,12 +1,12 @@
-"""ROS subscriber: measure SDK rectification without opening another camera."""
+"""Record ZED topics to measure SDK rectification."""
 
 import argparse
 from pathlib import Path
 
-from cv_bridge import CvBridge, CvBridgeError
-from message_filters import Subscriber, TimeSynchronizer
 import numpy as np
 import rclpy
+from cv_bridge import CvBridge, CvBridgeError
+from message_filters import Subscriber, TimeSynchronizer
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image

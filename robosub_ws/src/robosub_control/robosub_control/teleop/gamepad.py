@@ -1,4 +1,4 @@
-"""Xbox input mapping with explicit operator enable, independent of ROS."""
+"""Map Xbox input to vehicle commands."""
 
 import math
 from numbers import Real
@@ -11,13 +11,13 @@ NO_BUTTONS = (0,) * 8
 
 
 def validate_buttons(buttons):
-    """Normalize A/B/X/Y/LB/RB/Select/Start, accepting older face-only input."""
+    """Check A/B/X/Y/LB/RB/Select/Start buttons."""
     values = tuple(buttons)
-    if len(values) not in (4, 8) or any(
+    if len(values) != 8 or any(
         type(value) is not int or value not in (0, 1) for value in values
     ):
-        raise ValueError("Expected four or eight 0/1 controller buttons")
-    return values + (0,) * (8 - len(values))
+        raise ValueError("Expected eight 0/1 controller buttons")
+    return values
 
 
 def validate_axes(axes):
@@ -37,27 +37,13 @@ def validate_axes(axes):
 
 
 class GamepadControl:
-    """Map fresh input to surge/sway/heave/roll/yaw while enabled.
-
-    Only an explicit operator command changes enabled state. Stale or invalid
-    input produces zero effort without requiring another enable command.
-    """
+    """Use fresh controller input while the operator has enabled driving."""
 
     def __init__(self, source, max_effort=constants.GAMEPAD_MAX_EFFORT):
-        if source not in ("browser", "local"):
-            raise ValueError("Gamepad source must be browser or local")
-        if (
-            type(max_effort) not in (int, float)
-            or not math.isfinite(max_effort)
-            or not 0 < max_effort <= 1
-        ):
-            raise ValueError("Gamepad maximum effort must be between 0 and 1")
         self.source = source
         self.max_effort = float(max_effort)
         self.deadzone = constants.GAMEPAD_DEADZONE
         self.timeout = constants.GAMEPAD_INPUT_TIMEOUT_S
-        if not 0 <= self.deadzone < 1 or not 0 < self.timeout < math.inf:
-            raise ValueError("Invalid gamepad deadzone or input timeout")
         self.stop()
 
     def clear_input(self):
@@ -84,20 +70,19 @@ class GamepadControl:
                 values[4:] = [-value for value in values[4:]]
             values = validate_axes(values)
             if self.source == "browser":
-                if len(buttons) not in (1, 5, 9) or type(buttons[0]) is not int:
+                if len(buttons) != 9 or type(buttons[0]) is not int:
                     raise ValueError("Missing operator enabled state")
                 if buttons[0] not in (0, 1):
                     raise ValueError("Operator enabled state must be 0 or 1")
                 self.set_enabled(bool(buttons[0]))
-                actions = buttons[1:] if len(buttons) > 1 else NO_BUTTONS
+                actions = buttons[1:]
             else:
                 # SDL game_controller_node uses different shoulder/menu slots.
-                if len(buttons) >= 11:
-                    actions = [
-                        buttons[index] for index in (0, 1, 2, 3, 9, 10, 4, 6)
-                    ]
-                else:
-                    actions = buttons[:4] if len(buttons) >= 4 else NO_BUTTONS
+                if len(buttons) < 11:
+                    raise ValueError("Expected SDL controller buttons")
+                actions = [
+                    buttons[index] for index in (0, 1, 2, 3, 9, 10, 4, 6)
+                ]
             actions = validate_buttons(actions)
         except (ValueError, TypeError, OverflowError):
             self.clear_input()

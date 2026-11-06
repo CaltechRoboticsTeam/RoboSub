@@ -1,4 +1,4 @@
-"""Validated ROS parameters with cached values and committed-change logging."""
+"""Apply and log ROS parameter changes."""
 
 import sys
 
@@ -14,18 +14,14 @@ from robosub_control.utils.tunable_number import TunableNumber
 
 
 def fixed_parameter(node, name, default):
-    """Declare a startup-only setting; runtime changes would not take effect."""
+    """Declare a parameter that cannot change after startup."""
     return node.declare_parameter(
         name, default, ParameterDescriptor(read_only=True)
     ).value
 
 
 class TunableNode(Node):
-    """Apply accepted parameter values before their service response is sent.
-
-    Humble has no post-set callback. Wrap its public setters so validation
-    remains side-effect free and rejected changes never reach the controller.
-    """
+    """Sync accepted parameter changes before returning to the caller."""
 
     def __init__(self, name, **kwargs):
         super().__init__(name, **kwargs)
@@ -49,7 +45,7 @@ class TunableNode(Node):
 
 
 class TunableNumbers:
-    """Validate numeric parameters and bind committed values to live objects."""
+    """Apply numeric parameter changes to bound attributes."""
 
     def __init__(self, node):
         self.node = node
@@ -60,8 +56,6 @@ class TunableNumbers:
         self, name, default, *, minimum=None, maximum=None, description=""
     ):
         """Register a typed number, bounds, and parameter help text."""
-        if name in self.numbers:
-            raise ValueError(f"Duplicate tunable: {name}")
         number = TunableNumber(default, minimum=minimum, maximum=maximum)
         descriptor = ParameterDescriptor(
             description=description,
@@ -104,7 +98,6 @@ class TunableNumbers:
         return SetParametersResult(successful=True)
 
     def sync(self):
-        """Read committed local values; no ROS subscriptions or requests."""
         for name, number in self.numbers.items():
             value = self.node.get_parameter(name).value
             previous = number.get()

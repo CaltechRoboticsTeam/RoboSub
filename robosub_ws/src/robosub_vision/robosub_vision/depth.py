@@ -1,4 +1,4 @@
-"""Bounded ROI reconstruction and foreground selection. THIS IS FROM A PAPER!"""
+"""Reconstruct depth within detection boxes."""
 
 import numpy as np
 
@@ -26,11 +26,7 @@ def zed_points(pixels, depth, k):
 
 
 def foreground(points, pixels, box, spread, min_points):
-    """Choose a supported near depth layer seeded in the box's central area.
-
-    The result is a visible surface, not an inferred hidden object center.
-    CAD/keypoints give a stronger geometric reference for their solvers.
-    """
+    """Select the visible foreground surface near the box center."""
     valid = np.isfinite(points).all(axis=1)
     p, uv = points[valid], pixels[valid]
     if len(p) < min_points:

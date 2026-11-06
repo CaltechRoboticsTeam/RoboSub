@@ -1,4 +1,4 @@
-"""Small, ROS-independent records shared by detection and geometry."""
+"""Detection and geometry data types."""
 
 from dataclasses import dataclass
 

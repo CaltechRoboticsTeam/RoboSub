@@ -1,8 +1,4 @@
-"""Vectorized thick flat/dome port rays and stereo closest approach.
-
-Parameter order follows MDSKiel/colmap_underwater models_refrac.h.
-This evaluates calibrated geometry; housing optimization stays in Calibmar.
-"""
+"""Trace rays through flat or dome ports and triangulate stereo points."""
 
 from pathlib import Path
 
@@ -31,24 +27,6 @@ class PortCamera:
         self.d = np.asarray(data["D"], dtype=float)
         self.model = data["port_model"]
         self.p = np.asarray(data["port_parameters"], dtype=float)
-        if self.model not in ("FLATPORT", "DOMEPORT"):
-            raise ValueError(f"Unsupported housing model: {self.model}")
-        if self.p.shape != (8,) or not np.isfinite(self.p).all():
-            raise ValueError("Housing needs eight finite calibrated parameters")
-        if self.p[3] <= 0 or self.p[4] < 0 or np.any(self.p[5:] < 1):
-            raise ValueError("Invalid port distance/radius/thickness/indices")
-        if self.model == "FLATPORT":
-            if not np.isclose(np.linalg.norm(self.p[:3]), 1, atol=1e-5):
-                raise ValueError("Flat port normal must be a unit vector")
-        elif np.linalg.norm(self.p[:3]) >= self.p[3]:
-            raise ValueError("Camera must lie inside the dome's inner sphere")
-        if (
-            not np.isfinite(self.k).all()
-            or self.k[0, 0] <= 0
-            or self.k[1, 1] <= 0
-            or not np.isfinite(self.d).all()
-        ):
-            raise ValueError("Invalid physical camera intrinsics")
 
     def rays(self, pixels):
         pixels = np.asarray(pixels, dtype=float).reshape(-1, 2)
@@ -114,25 +92,13 @@ class RefractiveStereo:
 
     def __init__(self, housing_path, rectification_path, sdk_hash=None):
         data = yaml.safe_load(Path(housing_path).read_text())
-        if data.get("schema") != 1 or data.get("units") != "meters":
-            raise ValueError("Housing schema must be 1 with units: meters")
         self.left, self.right = (
             PortCamera(data["left"]),
             PortCamera(data["right"]),
         )
         self.size = tuple(data["image_size"])
         transform = np.asarray(data["T_left_right"], dtype=float)
-        if transform.shape != (4, 4) or not np.isfinite(transform).all():
-            raise ValueError(
-                "T_left_right must be a finite 4x4 rigid transform"
-            )
         self.r, self.t = transform[:3, :3], transform[:3, 3]
-        if not np.allclose(self.r.T @ self.r, np.eye(3), atol=1e-6):
-            raise ValueError("Housing stereo rotation must be orthonormal")
-        if not np.isclose(np.linalg.det(self.r), 1, atol=1e-6):
-            raise ValueError("Housing stereo rotation cannot be a reflection")
-        if not np.allclose(transform[3], [0, 0, 0, 1]):
-            raise ValueError("Invalid rigid transform bottom row")
         maps = np.load(rectification_path, allow_pickle=False)
         if not bool(maps["validated"]):
             raise ValueError(

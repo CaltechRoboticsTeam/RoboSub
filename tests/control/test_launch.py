@@ -54,7 +54,6 @@ class LaunchTests(unittest.TestCase):
                 "teleop_scale": "1.0",
                 "joy_device": "0",
                 "actuators": "preview",
-                "teensy_device": "/test/teensy",
                 "driver_station_port": "8765",
                 "record": "false",
                 "log_directory": "/unused/robosub_runs",
@@ -76,7 +75,13 @@ class LaunchTests(unittest.TestCase):
             with (
                 self.subTest(simulated=simulated),
                 tempfile.TemporaryDirectory() as directory,
-                patch.object(session, "require_package") as require,
+                patch.object(
+                    session,
+                    "get_package_share_directory",
+                    side_effect=lambda package: str(
+                        ROOT / "robosub_ws/src" / package
+                    ),
+                ) as require,
                 patch.object(
                     session, "ExecuteProcess", wraps=session.ExecuteProcess
                 ) as process,
@@ -109,7 +114,9 @@ class LaunchTests(unittest.TestCase):
                 self.assertEqual(
                     metadata["clock"], "simulation" if simulated else "system"
                 )
-                self.assertEqual(require.call_count, 2)
+                self.assertEqual(require.call_count, 2 if simulated else 3)
+                if not simulated:
+                    self.assertIn("hardware", metadata["config_files"])
 
     def test_physical_driver_requires_real_m5_teleop_or_mission(self):
         for changes in (
@@ -121,7 +128,14 @@ class LaunchTests(unittest.TestCase):
                 self.launch.start(
                     self.context(actuators="teensy_usb", **changes)
                 )
-        with patch.object(self.launch, "include"):
+        with (
+            patch.object(self.launch, "include"),
+            patch.object(
+                self.launch,
+                "get_package_share_directory",
+                return_value="/fake/mavros",
+            ),
+        ):
             actions = self.launch.start(
                 self.context(
                     mode="real",
@@ -130,7 +144,15 @@ class LaunchTests(unittest.TestCase):
                     actuators="teensy_usb",
                 )
             )
-        self.assertEqual(len(actions), 7)
+        self.assertEqual(len(actions), 10)
+        executables = [
+            action.node_executable
+            for action in actions
+            if isinstance(action, self.launch.Node)
+        ]
+        self.assertIn("mavros_node", executables)
+        self.assertIn("teledyne_dvl", executables)
+        self.assertIn("hardware_sensors", executables)
         self.assertEqual(
             sum(
                 action.node_executable == "hardware_diagnostics"
@@ -160,13 +182,7 @@ class LaunchTests(unittest.TestCase):
             vehicle.start(context)
         self.assertEqual(
             [call.kwargs["executable"] for call in node.call_args_list],
-            ["thruster_mixer", "hardware_sensors", "state_estimator"],
-        )
-        from robosub_control.config import current_m5
-
-        self.assertEqual(
-            node.call_args_list[-1].kwargs["parameters"][0]["dvl_offset"],
-            list(current_m5.CONTROL_BOARD_POSITION_BODY_M),
+            ["thruster_mixer", "state_estimator"],
         )
         context.launch_configurations["manual_control"] = "false"
         context.launch_configurations["preview_commands"] = "true"
@@ -177,7 +193,6 @@ class LaunchTests(unittest.TestCase):
             [
                 "thruster_mixer",
                 "actuator_commands",
-                "hardware_sensors",
                 "state_estimator",
                 "depth_heading_controller",
             ],
@@ -195,6 +210,14 @@ class LaunchTests(unittest.TestCase):
             if call.kwargs["executable"] == "state_estimator"
         )
         self.assertNotIn("dvl_offset", estimator.kwargs["parameters"][0])
+
+    def test_simulation_never_starts_physical_sensor_processes(self):
+        with (
+            patch.object(self.launch, "include"),
+            patch.object(self.launch, "get_package_share_directory") as share,
+        ):
+            self.launch.start(self.context())
+        share.assert_not_called()
 
 
 if __name__ == "__main__":

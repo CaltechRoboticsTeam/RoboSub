@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-"""Estimate /sub/state from IMU, positive-down depth and DVL velocity.
-
-Attitude uses a Mahony filter; XY integrates corrected body velocity.
-Incoming IMU orientation is ignored; yaw starts at zero.
-dvl_offset is the velocity origin: DVL in sim, Pixhawk in real mode."""
+"""Estimate attitude, position and velocity from IMU, depth and DVL."""
 
 import math
 
+import rclpy
 from geometry_msgs.msg import TwistWithCovarianceStamped, Vector3Stamped
 from nav_msgs.msg import Odometry
-import rclpy
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float64
 
@@ -131,7 +127,7 @@ class StateEstimator(TunableNode):
         )
 
     def reset_filters(self):
-        """Discard estimates and sample history across simulation epochs."""
+        """Reset estimates and sensor history when the clock restarts."""
         self.depth_samples.reset()
         self.dvl_samples.reset()
         self.imu_samples.reset()

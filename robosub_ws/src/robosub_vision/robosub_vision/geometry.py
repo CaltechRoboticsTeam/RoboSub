@@ -62,29 +62,12 @@ def pose_covariance(jacobian, residual, sigma, min_extent=0.05):
 def canonical_rotation(rotation, symmetry, prior=None):
     if not symmetry:
         return rotation
-    if not isinstance(symmetry, dict):
-        raise ValueError("CAD symmetry must be a mapping")
     if "rotations_xyzw" in symmetry:
         values = np.asarray(symmetry["rotations_xyzw"], dtype=float)
-        if (
-            values.ndim != 2
-            or values.shape[1] != 4
-            or not 1 <= len(values) <= 64
-            or not np.isfinite(values).all()
-            or not np.allclose(np.linalg.norm(values, axis=1), 1, atol=1e-5)
-        ):
-            raise ValueError("Symmetry rotations must be 1-64 unit quaternions")
         group = [np.eye(3), *Rotation.from_quat(values).as_matrix()]
     else:
         axis = unit(symmetry.get("axis", [0, 0, 0]))
         order = symmetry.get("order")
-        if (
-            type(order) is not int
-            or not 1 <= order <= 64
-            or axis.shape != (3,)
-            or not np.isfinite(axis).all()
-        ):
-            raise ValueError("CAD symmetry needs axis and finite order 1-64")
         group = [
             Rotation.from_rotvec(axis * (2 * np.pi * i / order)).as_matrix()
             for i in range(order)

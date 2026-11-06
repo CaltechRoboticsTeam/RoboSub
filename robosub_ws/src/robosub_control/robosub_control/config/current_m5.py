@@ -14,7 +14,7 @@ from robosub_control.config.thruster_layout import (
 
 
 def onshape_to_body(position):
-    """Rotate a position/vector 180 degrees about z; metres stay metres."""
+    """Rotate Onshape coordinates 180 degrees about z."""
     x, y, z = position
     return (-x, -y, z)
 
@@ -88,9 +88,6 @@ M5_REPLY_NODE_ID = None
 M5_SUPPLY_VOLTAGE_V = 24.0
 M5_POWER_TO_FORCE_CALIBRATION = "data/m5.json"
 M5_PROPELLER_DIAMETER_M = 0.090
-# Observed in the old prototype, not verified against the installed firmware.
-LEGACY_RECEIVER_BAUD = 115200
-LEGACY_RECEIVER_OUTPUT_SLOTS = 8
 # Software publication policy, not a manufacturer-rated update limit.
 MAX_OUTPUT_RATE_HZ = 100.0
 TARGET_TOPIC = "/sub/m5/force_targets"

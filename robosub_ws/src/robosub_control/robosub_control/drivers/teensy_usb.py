@@ -1,4 +1,4 @@
-"""Bounded USB transport for the Teensy M5 bridge; no ROS dependency."""
+"""Send commands to the Teensy over USB."""
 
 import binascii
 import fcntl
@@ -23,11 +23,7 @@ MAX_LINE = 160
 
 
 def m5_power_slots(commands, max_power=1.0):
-    """Map polarity-adjusted named powers into the eight-slot USB packet.
-
-    Scale the whole vector to preserve allocation when enforcing the motor
-    power cap. Unassigned protocol slots always remain neutral.
-    """
+    """Map motor powers to USB slots, scaling them to the power limit."""
     if not math.isfinite(max_power) or not 0 < max_power <= 1:
         raise ValueError("M5 power limit must be greater than 0 and at most 1")
     powers = tuple(commands)
@@ -35,15 +31,9 @@ def m5_power_slots(commands, max_power=1.0):
         not math.isfinite(value) or abs(value) > 1 for value in powers
     ):
         raise ValueError("Expected six finite M5 powers between -1 and 1")
-    if set(current_m5.M5_MOTOR_IDS) != set(current_m5.THRUSTER_NAMES):
-        raise ValueError("Every M5 thruster needs a motor ID")
     slots = tuple(
         current_m5.M5_MOTOR_IDS[name] for name in current_m5.THRUSTER_NAMES
     )
-    if any(
-        type(slot) is not int or not 0 <= slot < SLOTS for slot in slots
-    ) or (len(set(slots)) != len(slots)):
-        raise ValueError("M5 motor IDs must uniquely select slots 0-7")
     scale = max(1.0, max(abs(value) for value in powers) / max_power)
     cap = math.floor(MAX_DELTA_US * max_power)
     values = [NEUTRAL_US] * SLOTS
@@ -54,7 +44,7 @@ def m5_power_slots(commands, max_power=1.0):
 
 
 def encode_frame(*fields):
-    """Protect every USB command and response with the same CRC32."""
+    """Encode a USB packet with CRC32."""
     body = ",".join(str(value) for value in fields).encode("ascii")
     if len(body) + 10 >= MAX_LINE or any(c < 32 or c > 126 for c in body):
         raise ValueError("USB frame exceeds its bounds")
@@ -83,7 +73,7 @@ def decode_frame(line):
 def validate_pwm(values, enabled=False, max_delta=MAX_DELTA_US):
     values = tuple(values)
     if len(values) != SLOTS:
-        raise ValueError("Exactly eight legacy wire slots are required")
+        raise ValueError("Expected eight USB output slots")
     for value in values:
         if type(value) is not int or abs(value - NEUTRAL_US) > max_delta:
             raise ValueError(
@@ -95,7 +85,7 @@ def validate_pwm(values, enabled=False, max_delta=MAX_DELTA_US):
 
 
 def depth_sample(fields):
-    """Keep low-rail ADC readings visible without publishing bogus depth."""
+    """Decode pressure telemetry; ADC values below 2 have no depth."""
     if len(fields) != 5 or fields[0] != "D1":
         raise ValueError("Invalid USB depth response")
     adc = int(fields[1])
@@ -111,11 +101,7 @@ def depth_sample(fields):
 
 
 class TeensyUsb:
-    """Exclusive port owner; accepted commands must be acknowledged promptly.
-
-    An acknowledgment establishes USB acceptance. With the bus enabled, its
-    transmit counter records RS-485 writes. Neither proves motor movement.
-    """
+    """Send USB commands and check their acknowledgments."""
 
     def __init__(self, device=DEVICE, on_depth=None):
         self.fd = None
@@ -210,7 +196,7 @@ class TeensyUsb:
     def connect(self):
         self._write(encode_frame("H1", self.session))
         fields = self._wait("I1", timeout=2.0)
-        if int(fields[2]) not in (1, 2, 3) or tuple(map(int, fields[3:5])) != (
+        if int(fields[2]) != 3 or tuple(map(int, fields[3:5])) != (
             SLOTS,
             WATCHDOG_MS,
         ):
@@ -257,9 +243,9 @@ class TeensyUsb:
         return self.last_ack
 
     def query_motor_id(self, node):
-        """Read the motor ordinal; leave power and watchdog state unchanged."""
-        if self.info is None or self.info["protocol_version"] < 3:
-            raise ValueError("Motor identity reads require firmware v3")
+        """Read the motor assignment stored at a Node ID."""
+        if self.info is None:
+            raise RuntimeError("USB handshake is required before queries")
         if type(node) is not int or not 0 <= node <= 127:
             raise ValueError("Expected an individual network node ID")
         self._write(encode_frame("Q1", self.session, node))

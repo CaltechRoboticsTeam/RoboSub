@@ -1,4 +1,4 @@
-"""Operator-specified zero-based motor order shared by both vehicles."""
+"""Motor order for the vehicle profiles."""
 
 THRUSTER_NAMES = ("FR", "FL", "BR", "BL", "RD", "LD")
 THRUSTER_INDICES = {name: index for index, name in enumerate(THRUSTER_NAMES)}

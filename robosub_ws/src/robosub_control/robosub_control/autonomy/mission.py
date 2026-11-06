@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Execute mission steps with fresh-state deadlines and cancellation."""
+"""Run mission steps and cancel on timeout."""
 
 import json
 import math
 
+import rclpy
 from geometry_msgs.msg import Point
 from nav_msgs.msg import Odometry
-import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Empty, Float64, String
@@ -22,7 +22,7 @@ from robosub_control.utils.tuning import fixed_parameter
 
 
 def parse_steps(steps):
-    """Validate the complete command list before publishing any setpoints."""
+    """Parse mission commands before starting."""
     counts = {
         "dive": 1,
         "heading": 1,
@@ -44,10 +44,7 @@ def parse_steps(steps):
         cmd = words[0].lower()
         if len(words) - 1 != counts[cmd]:
             raise ValueError(f"{cmd} requires {counts[cmd]} arguments")
-        try:
-            args = tuple(float(word) for word in words[1:])
-        except ValueError as error:
-            raise ValueError(f"non-numeric argument in {step!r}") from error
+        args = tuple(float(word) for word in words[1:])
         if not all(math.isfinite(value) for value in args):
             raise ValueError(f"non-finite argument in {step!r}")
         if cmd in ("dive", "wait", "hold") and args[0] < 0.0:
@@ -87,31 +84,8 @@ class Mission(Node):
         self.speed_tol = float(g("speed_tol"))
         self.max_tilt_deg = float(g("max_tilt_deg"))
         self.hold_tilt_deg = float(g("hold_tilt_deg"))
-        self.startup_error = None
-        try:
-            self.parsed_steps = parse_steps(self.steps)
-            for name, value in (
-                ("pos_tol", self.pos_tol),
-                ("depth_tol", self.depth_tol),
-                ("heading_tol", self.heading_tol),
-                ("step_timeout", self.step_timeout),
-                ("state_timeout", self.state_timeout),
-                ("speed_tol", self.speed_tol),
-                ("max_tilt_deg", self.max_tilt_deg),
-            ):
-                if not math.isfinite(value) or value <= 0.0:
-                    raise ValueError(f"{name} must be finite and positive")
-            if not math.isfinite(self.settle) or self.settle < 0.0:
-                raise ValueError("settle must be finite and non-negative")
-            if not 0 < self.hold_tilt_deg < self.max_tilt_deg < 60:
-                raise ValueError(
-                    "Require 0 < hold_tilt_deg < max_tilt_deg < 60"
-                )
-        except ValueError as error:
-            self.startup_error = str(error)
-        self.state_freshness = SensorFreshness(
-            self.state_timeout if self.startup_error is None else 0.5
-        )
+        self.parsed_steps = parse_steps(self.steps)
+        self.state_freshness = SensorFreshness(self.state_timeout)
 
         def p(topic, message_type):
             return self.create_publisher(message_type, topic, 10)
@@ -196,22 +170,20 @@ class Mission(Node):
             return
         self.state = msg
         if (
-            self.startup_error is None
-            and self.i < len(self.steps)
+            self.i < len(self.steps)
             and self.needs_dvl()
             and msg.pose.covariance[0] < 0.0
         ):
             self.t_inside = None
         if (
-            self.startup_error is None
-            and 0 <= self.i < len(self.steps)
+            0 <= self.i < len(self.steps)
             and self.parsed_steps[self.i][0] == "hold"
             and not self.holding_targets()
         ):
             self.t_inside = None
 
     def fail(self, reason):
-        """Cancel automatic outputs once; zero effort does not mean parking."""
+        """Cancel the mission and publish the reason."""
         self.pub_cancel.publish(Empty())
         self.t_inside = None
         self.finished = True
@@ -228,7 +200,6 @@ class Mission(Node):
         self.fail(reason)
 
     def on_cancel(self, _msg):
-        """An operator cancellation also stops future mission setpoints."""
         if self.finished:
             return
         self.t_inside = None
@@ -236,7 +207,7 @@ class Mission(Node):
         self.publish_status("cancelled")
 
     def publish_status(self, status, **details):
-        """Publish source-clock events for passive mission observation."""
+        """Publish mission progress."""
         event = {
             "status": status,
             "index": self.i,
@@ -265,7 +236,7 @@ class Mission(Node):
         )
 
     def holding_targets(self):
-        """Check previously commanded targets without moving their setpoints."""
+        """Check whether the vehicle is holding its targets."""
         x, y, depth, yaw = self.pose()
         q = self.state.pose.pose.orientation
         roll, pitch, _ = q_to_rpy((q.w, q.x, q.y, q.z))
@@ -386,11 +357,7 @@ class Mission(Node):
         return q_to_rpy((q.w, q.x, q.y, q.z))[0]
 
     def periodic(self):
-        """Check mission progress on each mission timer tick."""
         if self.finished:
-            return
-        if self.startup_error is not None:
-            self.fail(self.startup_error)
             return
         t = self.now()
         if t < self.last_tick:

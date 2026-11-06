@@ -1,1 +1,1 @@
-"""Explicit field diagnostics, separate from the robot runtime."""
+"""Hardware diagnostic tools."""

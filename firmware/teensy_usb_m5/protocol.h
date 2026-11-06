@@ -8,7 +8,7 @@
 
 namespace robosub {
 
-// These are legacy packet slots, not the number of physical thrusters.
+// USB packets contain eight slots; six are assigned to thrusters.
 constexpr size_t kSlots = 8;
 constexpr uint16_t kNeutralUs = 1500;
 constexpr uint16_t kMaxDeltaUs = 500;

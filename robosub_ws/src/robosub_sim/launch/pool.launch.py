@@ -1,7 +1,7 @@
-"""Simulation environment plus the shared movement launch description."""
+"""Start Gazebo and vehicle control."""
 
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription

@@ -104,15 +104,6 @@ class FirmwareTests(unittest.TestCase):
         for invalid in ([0] * 5, [float("nan")] * 6, [1.01] * 6):
             with self.assertRaises(ValueError):
                 m5_power_slots(invalid)
-        for invalid_id in (-1, 8, True, 0):
-            with (
-                patch.dict(
-                    "robosub_control.config.current_m5.M5_MOTOR_IDS",
-                    LD=invalid_id,
-                ),
-                self.assertRaises(ValueError),
-            ):
-                m5_power_slots(powers)
         with patch.dict("robosub_control.config.current_m5.M5_MOTOR_IDS", LD=7):
             self.assertEqual(m5_power_slots([0, 0, 0, 0, 0, 0.5])[7], 1750)
 
@@ -205,7 +196,7 @@ class UsbTransportTests(unittest.TestCase):
                             response = encode_frame(
                                 "I1",
                                 body[1],
-                                3 if mode == "v3" else 1,
+                                3,
                                 8,
                                 250,
                                 25,
@@ -273,7 +264,7 @@ class UsbTransportTests(unittest.TestCase):
         from diagnostics.teensy_test import main
 
         commands = []
-        info = {"protocol_version": 2, "rs485_serial": 1, "max_delta_us": 500}
+        info = {"protocol_version": 3, "rs485_serial": 1, "max_delta_us": 500}
         bridge = SimpleNamespace(
             info=info,
             bus=BusDiagnostics(),

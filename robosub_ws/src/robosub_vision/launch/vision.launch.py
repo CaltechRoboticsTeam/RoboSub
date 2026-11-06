@@ -1,8 +1,9 @@
-"""The only production camera owner is the official ZED wrapper."""
+"""Start the ZED wrapper and perception node."""
 
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
+import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
@@ -19,7 +20,6 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from robosub_vision.config import load_config
 from robosub_vision.runtime import inspect_runtime
-import yaml
 
 
 def start(context):

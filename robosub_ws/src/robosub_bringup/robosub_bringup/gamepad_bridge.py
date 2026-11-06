@@ -1,10 +1,9 @@
-"""Serialize browser input and reject old packets or a second operator."""
+"""Handle browser controller input."""
 
 import threading
 import time
 
 from robosub_control.config import constants
-
 from robosub_control.teleop.gamepad import (
     NO_BUTTONS,
     validate_axes,
@@ -13,12 +12,7 @@ from robosub_control.teleop.gamepad import (
 
 
 class BrowserGamepad:
-    """One short-lived input lease; publishing occurs under the same lock.
-
-    Sequence numbers prevent a delayed movement request from overtaking a
-    newer stop. A different tab can claim input after the old lease expires,
-    without a neutral-input or bumper requirement.
-    """
+    """Reject delayed packets and allow one controller session at a time."""
 
     def __init__(self, publish):
         self.publish = publish

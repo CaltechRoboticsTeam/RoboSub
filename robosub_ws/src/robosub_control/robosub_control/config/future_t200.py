@@ -4,14 +4,20 @@ import math
 
 from robosub_control.config.thruster_layout import (
     THRUSTER_INDICES,
+)
+from robosub_control.config.thruster_layout import (
     THRUSTER_NAMES as THRUSTER_NAMES,
+)
+from robosub_control.config.thruster_layout import (
     THRUSTER_TOPIC_IDS as THRUSTER_TOPIC_IDS,
+)
+from robosub_control.config.thruster_layout import (
     THRUSTERS as THRUSTERS,
 )
 
 
 def onshape_to_body(position):
-    """Rotate a position/vector 180 degrees about z; metres stay metres."""
+    """Rotate Onshape coordinates 180 degrees about z."""
     x, y, z = position
     return (-x, -y, z)
 

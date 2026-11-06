@@ -1,14 +1,14 @@
 """Gamepad mapping, loss of input, HTTP bridge and ROS ownership checks."""
 
-from http.server import ThreadingHTTPServer
 import json
 import os
-from pathlib import Path
 import sys
 import threading
 import time
-from types import SimpleNamespace
 import unittest
+from http.server import ThreadingHTTPServer
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -23,7 +23,6 @@ sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_bringup"))
 from robosub_control.teleop.gamepad import (  # noqa: E402
     ZERO,
     GamepadControl,
-    validate_buttons,
 )
 
 try:
@@ -36,12 +35,12 @@ class GamepadTests(unittest.TestCase):
     def test_enable_accepts_moving_sticks_and_only_disable_turns_it_off(self):
         control = GamepadControl("browser")
         moving = [0, -1, 0, 0, 0, 0]
-        control.accept(moving, [1], 0.0)
+        control.accept(moving, [1] + [0] * 8, 0.0)
         self.assertTrue(control.enabled)
         self.assertGreater(control.sample(0.01)[0], 0)
-        control.accept(moving, [1], 0.05)
+        control.accept(moving, [1] + [0] * 8, 0.05)
         self.assertGreater(control.sample(0.06)[0], 0)
-        control.accept(moving, [0], 0.1)
+        control.accept(moving, [0] * 9, 0.1)
         self.assertFalse(control.enabled)
         self.assertEqual(control.sample(0.11), ZERO)
 
@@ -54,7 +53,6 @@ class GamepadTests(unittest.TestCase):
             sdl = [int(index == local_index) for index in range(15)]
             local.accept([0] * 6, sdl, 1.0)
             self.assertEqual(local.buttons, tuple(actions))
-        self.assertEqual(validate_buttons([0] * 4), (0,) * 8)
 
 
 @unittest.skipIf(rclpy is None, "ROS Humble is not installed")
@@ -76,6 +74,7 @@ class GamepadRosTests(unittest.TestCase):
                 (list(values), enabled)
             ),
             close=Mock(),
+            bus=SimpleNamespace(motor_statuses=lambda: []),
         )
         with patch(
             "robosub_control.drivers.teensy_actuators.TeensyUsb",
@@ -98,7 +97,9 @@ class GamepadRosTests(unittest.TestCase):
 
         try:
             teleop.on_joy(
-                Joy(axes=[0.0, -1.0, 0.0, -1.0, 0.0, 0.0], buttons=[1])
+                Joy(
+                    axes=[0.0, -1.0, 0.0, -1.0, 0.0, 0.0], buttons=[1] + [0] * 8
+                )
             )
             spin_until(lambda: received and received[-1][1])
             values, _ = received[-1]
@@ -141,11 +142,11 @@ class GamepadRosTests(unittest.TestCase):
         from rclpy.executors import SingleThreadedExecutor
         from rclpy.node import Node
         from robosub_bringup.driver_station import DriverStation, make_handler
-        from robosub_control.teleop.xbox_teleop import XboxTeleop
-        from robosub_control.thrusters.actuator_commands import ActuatorCommands
         from robosub_control.autonomy.depth_heading_controller import (
             DepthHeadingController,
         )
+        from robosub_control.teleop.xbox_teleop import XboxTeleop
+        from robosub_control.thrusters.actuator_commands import ActuatorCommands
         from robosub_control.thrusters.thruster_mixer import ThrusterMixer
 
         os.environ["ROS_DOMAIN_ID"] = "198"
@@ -212,7 +213,7 @@ class GamepadRosTests(unittest.TestCase):
                 "sequence": sequence,
                 "enabled": enabled,
                 "axes": axes or [0.0] * 6,
-                "buttons": buttons or [0] * 4,
+                "buttons": buttons or [0] * 8,
             }
             request = Request(
                 address + "/api/gamepad",
@@ -252,7 +253,7 @@ class GamepadRosTests(unittest.TestCase):
             self.assertIsInstance(teleop, DepthHeadingController)
             self.assertEqual(observer.count_publishers("/test/xbox_cmd"), 1)
             wait_for(lambda: teleop.state is not None)
-            post(4, buttons=[0, 0, 1, 0])
+            post(4, buttons=[0, 0, 1, 0, 0, 0, 0, 0])
             wait_for(lambda: teleop.depth_sp == 1.5)
             post(5)
             wait_for(lambda: teleop.depth_sp is None)
@@ -310,7 +311,7 @@ class GamepadRosTests(unittest.TestCase):
         )
         try:
             teleop.on_joy(
-                Joy(axes=[0.0, -1.0, 0.0, 0.0, 0.0, 0.0], buttons=[1])
+                Joy(axes=[0.0, -1.0, 0.0, 0.0, 0.0, 0.0], buttons=[1] + [0] * 8)
             )
             deadline = time.monotonic() + 2
             while time.monotonic() < deadline:

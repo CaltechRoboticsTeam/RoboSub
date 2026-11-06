@@ -47,16 +47,10 @@ for field_path in robosub_ws/src docs tests/control tools deploy/jetson firmware
     "${field_root}/${field_path}" \
     "${field_stage}/$(dirname -- "${field_path}")/"
 done
-mkdir -p "${field_stage}/reference"
-cp "${field_root}/prototypes/SummerTesting/MAVROSPixhawkDVLTest/my_mav_node/flo_startup_file" \
-  "${field_stage}/reference/flo_startup_file"
-cp "${field_root}/prototypes/eddie/Thruster_MavLink.ino" \
-  "${field_stage}/reference/Thruster_MavLink.ino"
 cp "${field_root}/mkdocs.yml" "${field_stage}/mkdocs.yml"
 cp "${field_root}/README.md" "${field_stage}/README.md"
 cp "${field_root}/AGENTS.md" "${field_stage}/AGENTS.md"
 cp "${field_root}/deploy/jetson/env.sh" "${field_stage}/env.sh"
-cp "${field_root}/deploy/jetson/field.sh" "${field_stage}/field.sh"
 cp "${field_root}/deploy/jetson/teensy.sh" "${field_stage}/teensy.sh"
 cp "${field_root}/deploy/jetson/joystick.sh" "${field_stage}/joystick.sh"
 python3 - "${field_stage}" "${field_revision}" <<'PY'
@@ -108,12 +102,6 @@ for name, expected in manifest['sha256'].items():
         raise SystemExit('Transfer checksum mismatch: ' + name)
 print('Verified transferred files:', len(manifest['sha256']))
 PY
-# Preserve the actual legacy Jetson sources as release-local reference data.
-field_legacy="$HOME/Robosub/prototypes/SummerTesting/MAVROSPixhawkDVLTest/my_mav_node"
-if [[ -d "${field_legacy}" ]]; then
-  mkdir -p "${field_release}/reference"
-  cp -a "${field_legacy}" "${field_release}/reference/legacy_jetson"
-fi
 set +u
 source /opt/ros/humble/setup.bash
 set -u
@@ -226,4 +214,3 @@ print('Current release:', current, '->', release)
 print('No robot programs were started or restarted.')
 PY
 SH_ACTIVATE
-printf 'Field tools: %s/field.sh\n' "${field_remote}"

@@ -1,14 +1,11 @@
-"""Start here: choose real or simulated I/O around shared movement programs."""
+"""Start the simulator or the Jetson hardware."""
 
 import errno
 import math
 import socket
 from pathlib import Path
 
-from ament_index_python.packages import (
-    PackageNotFoundError,
-    get_package_share_directory,
-)
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
@@ -36,7 +33,7 @@ def include(package, filename, arguments):
 
 
 def check_driver_station_port(port):
-    """Catch an existing driver station before starting another robot stack."""
+    """Check whether another driver station is running."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
@@ -58,26 +55,18 @@ def start(context):
 
     profile = get_profile(argument("vehicle"))
     mode = argument("mode")
-    if mode not in ("sim", "real"):
-        raise ValueError("mode must be sim or real")
     simulated = mode == "sim"
     world = argument("world")
-    if world not in ("pool", "bb_woollett"):
-        raise ValueError("world must be pool or bb_woollett")
     driver_station = argument("driver_station") == "true"
     plots = argument("plots") == "true"
     mission = argument("mission") == "true"
     teleop = argument("teleop")
-    if teleop not in ("off", "browser", "local"):
-        raise ValueError("teleop must be off, browser or local")
     if mission and teleop != "off":
         raise ValueError("mission and teleop are mutually exclusive")
     teleop_scale = float(argument("teleop_scale"))
     if not math.isfinite(teleop_scale) or not 0 < teleop_scale <= 1:
         raise ValueError("teleop_scale must be greater than 0 and at most 1")
     actuators = argument("actuators")
-    if actuators not in ("preview", "teensy_usb"):
-        raise ValueError("actuators must be preview or teensy_usb")
     physical = actuators == "teensy_usb"
     if physical and (
         simulated
@@ -91,38 +80,12 @@ def start(context):
     vision = not simulated if vision == "auto" else vision == "true"
     rate = float(argument("control_rate"))
     output_rate = float(argument("output_rate"))
-    if not math.isfinite(rate) or not (
-        constants.MIN_CONTROL_RATE_HZ <= rate <= constants.MAX_CONTROL_RATE_HZ
-    ):
-        raise ValueError("control_rate must be between 1 and 1000 Hz")
-    if not math.isfinite(output_rate) or not (
-        constants.MIN_CONTROL_RATE_HZ
-        <= output_rate
-        <= profile.MAX_OUTPUT_RATE_HZ
-    ):
-        raise ValueError(
-            f"output_rate must be 1-{profile.MAX_OUTPUT_RATE_HZ:g} Hz "
-            f"for {profile.NAME}"
-        )
-    if simulated and vision:
-        raise ValueError("Gazebo stereo perception is not implemented")
     mission_config = argument("mission_config")
-    if mission_config and not mission:
-        raise ValueError("mission_config requires mission:=true")
-    if mission_config and not Path(mission_config).is_file():
-        raise ValueError(f"Mission config does not exist: {mission_config}")
     if driver_station or teleop != "off":
         port = int(argument("driver_station_port"))
-        if not 1 <= port <= 65535:
-            raise ValueError("driver_station_port must be between 1 and 65535")
         check_driver_station_port(port)
     if plots:
-        try:
-            get_package_share_directory("rqt_plot")
-        except PackageNotFoundError as error:
-            raise RuntimeError(
-                "Install/source rqt_plot before using plots:=true"
-            ) from error
+        get_package_share_directory("rqt_plot")
     shared = {
         "vehicle": profile.NAME,
         "manual_control": str(teleop != "off").lower(),
@@ -143,12 +106,16 @@ def start(context):
             )
         ]
     else:
+        hardware_config = str(
+            Path(get_package_share_directory("robosub_bringup"))
+            / "config/hardware.yaml"
+        )
         actions = [
             LogInfo(
                 msg=(
                     f"Real mode: actuator transport={actuators}. "
-                    "Using existing MAVROS IMU, USB/MAVROS pressure and "
-                    "DVL odometry through hardware_sensors. "
+                    "Starting MAVROS and the Teledyne DVL reader. "
+                    f"Hardware configuration: {hardware_config}. "
                     "Manual control uses body efforts directly."
                 )
             ),
@@ -163,13 +130,36 @@ def start(context):
                 },
             ),
         ]
+        mavros = Path(get_package_share_directory("mavros"))
+        actions.extend(
+            [
+                Node(
+                    package="mavros",
+                    executable="mavros_node",
+                    output="screen",
+                    parameters=[
+                        str(mavros / "launch/px4_pluginlists.yaml"),
+                        str(mavros / "launch/px4_config.yaml"),
+                        hardware_config,
+                        {"use_sim_time": False},
+                    ],
+                ),
+                Node(
+                    package="robosub_control",
+                    executable="teledyne_dvl",
+                    output="screen",
+                    parameters=[hardware_config, {"use_sim_time": False}],
+                ),
+                Node(
+                    package="robosub_control",
+                    executable="hardware_sensors",
+                    output="screen",
+                    parameters=[hardware_config, {"use_sim_time": False}],
+                ),
+            ]
+        )
     if vision:
-        try:
-            share = Path(get_package_share_directory("robosub_vision"))
-        except PackageNotFoundError as error:
-            raise RuntimeError(
-                "Build/source robosub_vision before using real vision"
-            ) from error
+        share = Path(get_package_share_directory("robosub_vision"))
         config = argument("vision_config") or str(
             share / "config/development.yaml"
         )
@@ -225,15 +215,8 @@ def start(context):
             )
         )
     if teleop == "local":
-        try:
-            get_package_share_directory("joy")
-        except PackageNotFoundError as error:
-            raise RuntimeError(
-                "Install ros-humble-joy for teleop:=local"
-            ) from error
+        get_package_share_directory("joy")
         device = int(argument("joy_device"))
-        if device < 0:
-            raise ValueError("joy_device must be a nonnegative device index")
         actions.append(
             Node(
                 package="joy",
@@ -302,11 +285,11 @@ def start(context):
             executable="teensy_actuators",
             output="screen",
             parameters=[
+                hardware_config,
                 {
-                    "device": argument("teensy_device"),
                     "max_power": teleop_scale,
                     "use_sim_time": False,
-                }
+                },
             ],
         )
         actions.extend(
@@ -324,7 +307,6 @@ def start(context):
 
 
 def generate_launch_description():
-    """Declare vehicle, I/O and operator settings for the robot launch."""
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -381,12 +363,6 @@ def generate_launch_description():
                 default_value="preview",
                 choices=["preview", "teensy_usb"],
                 description="Physical M5 output requires real teleop mode",
-            ),
-            DeclareLaunchArgument(
-                "teensy_device",
-                default_value=(
-                    "/dev/serial/by-id/usb-Teensyduino_USB_Serial_19620450-if00"
-                ),
             ),
             DeclareLaunchArgument("driver_station_port", default_value="8765"),
             *session_arguments(),

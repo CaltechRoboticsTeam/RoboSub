@@ -40,8 +40,15 @@ ros2 launch robosub_bringup robot.launch.py \
 
 Open the [driver station](http://127.0.0.1:18765). In Foxglove, choose
 **Open connection → Foxglove WebSocket** and enter `ws://127.0.0.1:18766`.
-MAVROS and the existing DVL reader must be running; this launch consumes
-those processes' sensor topics. `actuators:=preview` leaves USB closed.
+Real mode starts MAVROS and the production Teledyne DVL reader, along with
+the sensor adapter and diagnostics. Stop any separately launched MAVROS or
+DVL reader first. `actuators:=preview` leaves the Teensy USB closed.
+
+Pixhawk, DVL and Teensy connections are configured in
+[`hardware.yaml`](../../robosub_ws/src/robosub_bringup/config/hardware.yaml).
+Real mode uses this file; each recorded run saves a copy.
+MAVROS requires `ros-humble-mavros`, `ros-humble-mavros-extras` and its
+GeographicLib datasets.
 
 For the Bluetooth Xbox controller in Zen/Firefox on Mac, leave
 `ros2 run robosub_bringup mac_gamepad` running in a Mac ROS shell too.

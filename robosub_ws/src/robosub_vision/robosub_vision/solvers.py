@@ -1,7 +1,7 @@
-"""Four explicit geometry choices; no solver registry or plugin lifecycle."""
+"""Estimate target position and pose."""
 
-from itertools import permutations, product
 import json
+from itertools import permutations, product
 
 import cv2
 import numpy as np
@@ -183,7 +183,7 @@ def cylinder(target, points, sigma):
 
 
 class CadSolver:
-    """Visible-surface, trimmed point-to-plane ICP with bounded multi-start."""
+    """Fit a CAD model to visible surface points using ICP."""
 
     def __init__(self, target, samples=2000):
         import trimesh  # Only enabled CAD targets load the mesh library.

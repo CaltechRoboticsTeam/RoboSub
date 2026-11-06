@@ -1,4 +1,4 @@
-"""Bounded decoding of captured VideoRay packets; never opens a bus."""
+"""Decode VideoRay motor replies."""
 
 import binascii
 import math
@@ -11,7 +11,7 @@ RESPONSE_SYNC = b"\xf0\x0f"
 
 
 class BusDiagnostics:
-    """Separate raw activity, echoed requests and CRC-valid motor feedback."""
+    """Track RS-485 traffic and motor replies."""
 
     def __init__(self):
         self.buffer = bytearray()
@@ -128,7 +128,7 @@ class BusDiagnostics:
                 self.nodes[node] = (self.status_time, status)
 
     def motor_statuses(self):
-        """Return observed identities; a node address is not a motor slot."""
+        """Report each node and its stored motor assignment."""
         now = time.monotonic()
         return [
             {

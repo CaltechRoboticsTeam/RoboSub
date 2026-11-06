@@ -1,21 +1,19 @@
-"""Validate sensor sample age and progress without depending on ROS."""
+"""Check sensor timestamps."""
 
 import math
 
 
 def stamp_to_sec(stamp):
-    """Convert a normalized, nonnegative ROS stamp; reject malformed stamps."""
+    """Convert a ROS timestamp to seconds, or NaN if invalid."""
     if stamp.sec < 0 or not 0 <= stamp.nanosec < 1_000_000_000:
         return math.nan
     return (stamp.sec * 1_000_000_000 + stamp.nanosec) * 1e-9
 
 
 class SensorFreshness:
-    """Keep rejected or repeated samples from renewing sensor validity."""
+    """Track new samples and expire stale data."""
 
     def __init__(self, max_age):
-        if not math.isfinite(max_age) or max_age <= 0:
-            raise ValueError("Sensor timeout must be finite and positive")
         self.max_age = max_age
         self.reset()
 
@@ -33,7 +31,7 @@ class SensorFreshness:
         return True
 
     def accept(self, stamp, now, values=()):
-        """Accept a new finite sample only within the current clock epoch."""
+        """Accept a new, finite sample with a recent timestamp."""
         if not self._observe_clock(now):
             return False
         if not math.isfinite(stamp) or not all(map(math.isfinite, values)):
@@ -47,7 +45,7 @@ class SensorFreshness:
         return True
 
     def fresh(self, now):
-        """Expire on source age, silence, or a rewind of the node clock."""
+        """Check sample age and clock continuity."""
         return (
             self._observe_clock(now)
             and self.stamp is not None

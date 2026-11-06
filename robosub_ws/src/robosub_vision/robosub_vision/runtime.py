@@ -1,10 +1,10 @@
-"""Version checks and explicit translation into official wrapper parameters."""
+"""Check ZED versions and prepare wrapper parameters."""
 
 import os
-from pathlib import Path
 import re
 import subprocess
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import yaml
 
@@ -65,8 +65,8 @@ def wrapper_parameters(config, sdk_version):
 
 def inspect_runtime(config):
     """Check versions and parameter keys without opening a camera."""
-    from ament_index_python.packages import get_package_share_directory
     import pyzed.sl as sl
+    from ament_index_python.packages import get_package_share_directory
 
     if os.environ.get("ROS_DISTRO") != "humble":
         raise ValueError("Source ROS 2 Humble before launching vision")
@@ -104,7 +104,7 @@ def inspect_runtime(config):
 
 
 def machine_report():
-    """Inspect local software only; no USB probing, SSH, or camera ownership."""
+    """Report installed vision software."""
     report = {"ROS_DISTRO": os.environ.get("ROS_DISTRO", "unavailable")}
     for path in ("/etc/nv_tegra_release", "/etc/os-release"):
         if Path(path).is_file():

@@ -1,0 +1,23 @@
+# Defaults from the saved Jetson startup; verify against the actual devices.
+# Prefer the identified /dev/serial/by-id/ path for the DVL adapter.
+mavros:
+  ros__parameters:
+    fcu_url: /dev/ttyTHS1:115200
+    gcs_url: ""
+    tgt_system: 1
+    tgt_component: 1
+    fcu_protocol: v2.0
+
+dvl_reader:
+  ros__parameters:
+    device: /dev/ttyUSB0
+    baud: 115200
+    start_stream: true
+    # CS starts the saved setup; no factory reset or persistent writes.
+    mounting_confirmed: false
+    instrument_to_body_rpy_deg: [0.0, 90.0, 0.0]
+    velocity_sign: 1.0
+
+teensy_actuators:
+  ros__parameters:
+    device: /dev/serial/by-id/usb-Teensyduino_USB_Serial_19620450-if00

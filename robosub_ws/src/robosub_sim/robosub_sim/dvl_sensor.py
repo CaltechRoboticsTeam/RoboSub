@@ -3,9 +3,9 @@
 
 import random
 
+import rclpy
 from geometry_msgs.msg import TwistWithCovarianceStamped
 from nav_msgs.msg import Odometry
-import rclpy
 from rclpy.node import Node
 from robosub_control.autonomy.sensor_freshness import (
     SensorFreshness,
@@ -84,7 +84,6 @@ class DvlSensor(Node):
         return now
 
     def periodic(self):
-        """Generate one simulated DVL ping on each sensor timer tick."""
         now = self.now()
         if self.odom is None or not self.odom_samples.fresh(now):
             return

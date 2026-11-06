@@ -1,16 +1,16 @@
 """AprilTag stereo calibration, with fixed factory physical extrinsics."""
 
 import argparse
-from datetime import datetime, timezone
 import hashlib
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import cv2
 import numpy as np
+import yaml
 from scipy.optimize import least_squares
 from scipy.sparse import lil_matrix
-import yaml
 
 
 def sha256(path):
@@ -25,22 +25,13 @@ class TagGrid:
             raise ValueError(
                 "Measure board dimensions, then set measured: true"
             )
-        if data["dictionary"] != "DICT_APRILTAG_36h11":
-            raise ValueError("This utility supports AprilTag 36h11 grids")
         self.dictionary = cv2.aruco.getPredefinedDictionary(
-            cv2.aruco.DICT_APRILTAG_36h11
+            getattr(cv2.aruco, data["dictionary"])
         )
-        for key in ("columns", "rows"):
-            if type(data[key]) is not int or data[key] <= 0:
-                raise ValueError(f"Board {key} must be a positive integer")
-        if data["marker_size"] <= 0 or data["marker_spacing"] <= 0:
-            raise ValueError("Board lengths must be positive metres")
         count = data["columns"] * data["rows"]
         self.ids = np.arange(
             data["first_id"], data["first_id"] + count, dtype=np.int32
         )
-        if self.ids[0] < 0 or self.ids[-1] >= len(self.dictionary.bytesList):
-            raise ValueError("Board IDs exceed the 36h11 dictionary")
         self.board = cv2.aruco.GridBoard(
             (data["columns"], data["rows"]),
             data["marker_size"],
@@ -77,7 +68,7 @@ class TagGrid:
 
 
 def write_opencv(path, size, k1, d1, k2, d2, r, t):
-    """Exact SDK schema: Rodrigues R (radians), T in MILLIMETRES."""
+    """Write SDK calibration: Rodrigues R in radians, T in millimetres."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fs = cv2.FileStorage(str(path), cv2.FILE_STORAGE_WRITE)
@@ -133,11 +124,7 @@ def read_opencv(path):
 
 
 def solve_stereo(observations, factory):
-    """Optimize effective intrinsics and board poses; fix physical R and t.
-
-    Joint reprojection keeps the baseline metric during optimization. Merely
-    rescaling an unconstrained stereo solution afterwards would bias the fit.
-    """
+    """Fit intrinsics and board poses; keep camera R and baseline fixed."""
     objects, left, right = map(list, zip(*observations, strict=True))
     size = tuple(factory["image_size"])
     r = np.asarray(factory["physical_R"])

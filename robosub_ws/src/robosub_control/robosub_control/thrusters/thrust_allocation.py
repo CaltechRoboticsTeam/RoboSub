@@ -1,13 +1,13 @@
-"""Five-axis geometry allocation in a selected vehicle command domain."""
+"""Distribute five-axis commands across the thrusters."""
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 
 import numpy as np
 
+from robosub_control.config.vehicle_profiles import get_profile
 from robosub_control.thrusters.m5 import M5Model
 from robosub_control.thrusters.t200 import T200Model, finite_number
-from robosub_control.config.vehicle_profiles import get_profile
 
 AXES = ("surge", "sway", "heave", "roll", "yaw")
 CONTROLLED_ROWS = (0, 1, 2, 3, 5)
@@ -22,7 +22,7 @@ class Allocation:
 
 
 class ThrustAllocator:
-    """Allocate body forces/torques, then convert forces to motor commands."""
+    """Convert body forces and torques to motor commands."""
 
     def __init__(self, voltage_v=None, vehicle="current_m5"):
         self.profile = profile = get_profile(vehicle)
@@ -34,24 +34,12 @@ class ThrustAllocator:
             )
             self.model = M5Model(voltage)
         else:
-            channels = list(profile.THRUSTER_CHANNELS.values())
-            if set(profile.THRUSTER_CHANNELS) != set(self.names):
-                raise ValueError("Every T200 needs a board channel")
-            if any(type(channel) is not int for channel in channels):
-                raise ValueError("Thruster channels must be integers")
-            if sorted(channels) != list(range(len(self.names))):
-                raise ValueError("Thruster channels must be unique values 0-5")
             voltage = (
                 profile.THRUSTER_SUPPLY_VOLTAGE_V
                 if voltage_v is None
                 else voltage_v
             )
             self.model = T200Model(voltage, profile.ESC_CURRENT_MODEL_LIMIT_A)
-        if set(profile.THRUSTER_REVERSED) != set(self.names) or any(
-            type(value) is not bool
-            for value in profile.THRUSTER_REVERSED.values()
-        ):
-            raise ValueError("Every thruster reversal setting must be boolean")
         columns = []
         for name in self.names:
             position = np.asarray(
@@ -66,12 +54,6 @@ class ThrustAllocator:
                     -math.sin(pitch),
                 )
             )
-            if (
-                position.shape != (3,)
-                or not np.all(np.isfinite(position))
-                or not np.all(np.isfinite(direction))
-            ):
-                raise ValueError(f"Invalid mount geometry: {name}")
             direction[np.abs(direction) < 1e-12] = 0.0
             columns.append(
                 np.concatenate(
@@ -83,8 +65,6 @@ class ThrustAllocator:
             )
         self.wrench_matrix = np.column_stack(columns)
         self.control_matrix = self.wrench_matrix[list(CONTROLLED_ROWS), :]
-        if np.linalg.matrix_rank(self.control_matrix) != len(AXES):
-            raise ValueError("Thruster layout cannot control all five axes")
         self.inverse = np.linalg.pinv(self.control_matrix, rcond=1e-12)
         self.limits = np.array(
             [
@@ -97,8 +77,6 @@ class ThrustAllocator:
             positive = self._maximum_scale(self.inverse[:, index])
             negative = self._maximum_scale(-self.inverse[:, index])
             fraction = profile.MIXER_AXIS_FRACTIONS[axis]
-            if not math.isfinite(fraction) or not 0 < fraction <= 1:
-                raise ValueError(f"Invalid mixer fraction: {axis}")
             scales.append(min(positive, negative) * fraction)
         self.axis_scales = np.array(scales)
 

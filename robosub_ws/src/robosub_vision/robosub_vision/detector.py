@@ -1,4 +1,4 @@
-"""One lightweight YOLO detection/landmark model shared by enabled targets."""
+"""Detect targets and landmarks with YOLO."""
 
 import numpy as np
 
@@ -11,15 +11,8 @@ class Detector:
 
         self.options = options
         self.model = YOLO(options["detector_model"])
-        if self.model.task not in ("detect", "pose"):
-            raise ValueError("Use a YOLO detection or keypoint model")
         names = self.model.names
         requested = {t["detector_class"] for t in targets}
-        missing = requested - set(names.values())
-        if missing:
-            raise ValueError(
-                f"Detector lacks configured classes: {sorted(missing)}"
-            )
         self.classes = [i for i, name in names.items() if name in requested]
         self.confidence = min(t["min_confidence"] for t in targets)
 

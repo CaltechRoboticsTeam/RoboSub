@@ -33,8 +33,6 @@ def start(context):
         return LaunchConfiguration(name).perform(context)
 
     config = argument("mission_config")
-    if not Path(config).is_file():
-        raise ValueError(f"Mission config does not exist: {config}")
     share = Path(get_package_share_directory("robosub_bringup"))
     robot = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(str(share / "launch/robot.launch.py")),

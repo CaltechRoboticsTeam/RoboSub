@@ -26,13 +26,6 @@ class ActuatorCommands(Node):
         output_rate = fixed_parameter(
             self, "output_rate", constants.CONTROLLER_DEFAULTS["output_rate"]
         )
-        if not (
-            1 <= rate <= constants.MAX_CONTROL_RATE_HZ
-            and 1 <= output_rate <= profile.MAX_OUTPUT_RATE_HZ
-        ):
-            raise ValueError(
-                f"Output rate must be 1-{profile.MAX_OUTPUT_RATE_HZ:g} Hz"
-            )
         self.rate = min(rate, output_rate)
         self.allocator = ThrustAllocator(vehicle=profile.NAME)
         self.max_power = fixed_parameter(self, "max_power", 1.0)

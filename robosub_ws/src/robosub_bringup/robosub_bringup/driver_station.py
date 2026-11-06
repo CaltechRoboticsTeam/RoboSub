@@ -26,8 +26,6 @@ class DriverStation(Node):
     def __init__(self):
         super().__init__("driver_station")
         self.port = fixed_parameter(self, "port", 8765)
-        if type(self.port) is not int or not 1 <= self.port <= 65535:
-            raise ValueError("port must be an integer between 1 and 65535")
         self.operator = OperatorPanel(self)
         self.diagnostics_lock = threading.Lock()
         self.diagnostics = []

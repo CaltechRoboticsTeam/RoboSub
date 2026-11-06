@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Measure the real controller callback with synthetic state and no hardware."""
+"""Measure controller timing using synthetic state."""
 
 import argparse
 import json
 import math
 import os
-from pathlib import Path
 import statistics
 import sys
 import time
+from pathlib import Path
 
 
 def main():
@@ -25,9 +25,9 @@ def main():
     os.environ["ROS_LOCALHOST_ONLY"] = "1"
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root / "robosub_ws/src/robosub_control"))
+    import rclpy
     from geometry_msgs.msg import Twist
     from nav_msgs.msg import Odometry
-    import rclpy
     from rclpy.executors import SingleThreadedExecutor
     from rclpy.node import Node
     from robosub_control.autonomy.depth_heading_controller import (

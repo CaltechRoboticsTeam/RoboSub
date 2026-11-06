@@ -2,7 +2,7 @@
 
 Current path: Jetson USB → Teensy 4.1 Serial1 → RS-485 → six VideoRay M5s.
 Motor IDs: **FR=0, FL=1, BR=2, BL=3, RD=4, LD=6**; slots 5 and 7 stay neutral.
-USB driving bypasses PX4 arming. See the [driving guide](../../deploy/jetson/README.md).
+USB driving bypasses PX4 arming. See the [driving guide](https://github.com/CaltechRoboticsTeam/RoboSub/blob/main/deploy/jetson/README.md).
 
 ## Build
 
@@ -71,7 +71,7 @@ motor and wait five seconds before a probe, without entering its text menu.
 Real launches publish `diagnostic_msgs/DiagnosticArray` on `/diagnostics`,
 under `sub/Diagnostics`, and show the same rows in the driver station.
 Depth, raw pressure ADC, MAVROS/Pixhawk, DVL input, Teensy, command flow and
-each named motor have separate status. Derived depth and MAVROS odometry
+each named motor have separate status. Derived depth and DVL velocity
 do not independently prove pressure calibration or a connected DVL.
 
 The Serial1 **v3** image captures CRC-checked M5 replies and cycles reply
@@ -85,11 +85,7 @@ reported M5 faults are errors. A detected assignment still needs to match
 the physical motor location. No response can reveal two devices sharing
 the same Node ID reliably.
 
-The ROS changes accept older firmware, but individual motor rows remain
-unknown until v3 is installed. Deploy/rebuild the ROS packages before
-installing v3; older drivers reject its version number. Building does not
-flash the Teensy. The previous local Serial1 image was preserved in
-`.cache/diagnostics-before-v3/` before the diagnostics build.
+The ROS driver requires firmware v3. Building does not flash the Teensy.
 
 On the Jetson, with the normal mission stopped:
 
@@ -109,14 +105,14 @@ M5 command; these values are packet fields, not physical PWM pulses.
 
 An ACK proves USB acceptance; transmit counters prove writes. Neither proves
 motor movement. `--require-feedback` additionally requires fresh, CRC-valid,
-fault-free motor replies and capture-capable firmware.
+fault-free motor replies.
 
 ## Protocol
 
 CRC32-framed ASCII: `H1` capabilities, `C1` commands, `I1` capabilities reply,
-`A1` acknowledgment, `D1` pressure/UART telemetry, `F1` fault; v2 adds `R1`
-receive capture. v3 adds read-only `Q1,session,node` motor identity requests
-and `K1,session,node` USB acknowledgments. These acknowledgments are separate
+`A1` acknowledgment, `D1` pressure/UART telemetry, `F1` fault, `R1` receive
+capture, `Q1,session,node` motor identity requests and `K1,session,node`
+USB acknowledgments. These acknowledgments are separate
 from the motor's captured CSR reply. Commands carry session IDs and
 increasing sequence numbers.
 A 250 ms watchdog or USB disconnect sends neutral; re-enabling requires a
@@ -124,9 +120,7 @@ fresh neutral command. Pressure calibration is preserved from the supplied
 sketch; ADC values ≤1 are unavailable.
 
 The supplied wiring/settings use DE=3, RE=2, A0 pressure, 115200 baud,
-group address `0x81`. The original sketch requests reply node 1; v3 scans
-all individual nodes. Source: preserved
-`firmware/reference/teensy-installed-2026-10-28.ino`.
+group address `0x81`. The firmware scans Node IDs 0–127 for replies.
 [VideoRay command reference](https://download.videoray.com/documentation/m5_thruster/html/commands_responses.html).
 
 ## Collect depth calibration data

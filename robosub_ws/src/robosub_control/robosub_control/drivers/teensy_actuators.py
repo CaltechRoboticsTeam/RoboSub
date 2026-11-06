@@ -157,8 +157,7 @@ class TeensyActuators(Node):
     def query_identity(self):
         now = time.monotonic()
         if (
-            self.bridge_info.get("protocol_version", 1) < 3
-            or self.last_command is None
+            self.last_command is None
             or not 0.01 <= now - self.last_command <= 0.04
         ):
             return

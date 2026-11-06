@@ -1,4 +1,4 @@
-"""Report observed hardware and command flow without opening any device."""
+"""Publish device and command status on /diagnostics."""
 
 import json
 import math
@@ -6,7 +6,7 @@ import time
 
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
-from geometry_msgs.msg import Twist, TwistWithCovarianceStamped
+from geometry_msgs.msg import Twist
 from mavros_msgs.msg import State
 from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
@@ -27,7 +27,7 @@ class HardwareDiagnostics(Node):
         for key, topic, kind in (
             ("depth", "/depth", Float64),
             ("pressure", "/sub/sensors/pressure_adc", Int32),
-            ("dvl", "/dvl/velocity", TwistWithCovarianceStamped),
+            ("dvl_driver", "/sub/sensors/dvl/status", String),
             ("pixhawk", "/mavros/state", State),
             ("imu", "/imu/data_raw", Imu),
             ("teensy", "/sub/teensy/status", String),
@@ -45,7 +45,7 @@ class HardwareDiagnostics(Node):
         self.create_timer(0.5, self.periodic, clock=self.wall_clock)
 
     def on_sample(self, key, message):
-        if key == "teensy":
+        if key in ("teensy", "dvl_driver"):
             try:
                 value = json.loads(message.data)
                 if not isinstance(value, dict):
@@ -97,16 +97,22 @@ class HardwareDiagnostics(Node):
                         **{"depth_m" if key == "depth" else "adc": value},
                     )
                 )
-        dvl = self.sample("dvl")
-        rows.append(
-            self.status(
-                "DVL",
-                3 if dvl is None else 1,
-                "No fresh velocity"
-                if dvl is None
-                else "MAVROS odometry velocity; DVL origin unverified",
-            )
-        )
+        driver = self.sample("dvl_driver")
+        if driver is None:
+            rows.append(self.status("DVL", 3, "No fresh DVL driver status"))
+        else:
+            packet_age = driver.get("packet_age_s")
+            fresh = packet_age is not None and 0 <= packet_age <= 2.5
+            if not driver.get("serial_open"):
+                level, message = 2, driver.get("error") or "Serial port closed"
+            elif not fresh:
+                level = 1
+                message = "Serial open; no fresh checksum-valid PD0"
+            elif driver.get("error"):
+                level, message = 1, driver["error"]
+            else:
+                level, message = 0, "Checksum-valid PD0 bottom track received"
+            rows.append(self.status("DVL", level, message, **driver))
         pixhawk = self.sample("pixhawk")
         rows.append(
             self.status(
@@ -126,7 +132,6 @@ class HardwareDiagnostics(Node):
 
     def motor_statuses(self, bridge):
         rows = []
-        version = bridge.get("firmware", {}).get("protocol_version", 1)
         motors = bridge.get("motors", [])
         for name in current_m5.THRUSTER_NAMES:
             motor_id = current_m5.M5_MOTOR_IDS[name]
@@ -135,8 +140,6 @@ class HardwareDiagnostics(Node):
             values = {"motor_id": motor_id}
             if not fresh:
                 text = "No identified reply; power/wiring/address unconfirmed"
-                if version < 3:
-                    text = "Installed firmware lacks per-motor discovery (v3)"
                 rows.append(self.status(f"Thruster {name}", 3, text, **values))
                 continue
             if len(fresh) > 1:

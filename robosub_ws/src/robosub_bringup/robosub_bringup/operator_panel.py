@@ -5,8 +5,8 @@ import time
 
 from geometry_msgs.msg import Twist
 from robosub_control.config import constants
-from robosub_control.utils.tuning import fixed_parameter
 from robosub_control.config.vehicle_profiles import profile_from_node
+from robosub_control.utils.tuning import fixed_parameter
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool, Float64MultiArray, String, UInt16MultiArray
 
@@ -17,8 +17,6 @@ class OperatorPanel:
     def __init__(self, node):
         self.node = node
         self.source = fixed_parameter(node, "teleop_source", "off")
-        if self.source not in ("off", "browser", "local"):
-            raise ValueError("teleop_source must be off, browser or local")
         self.profile = profile_from_node(node)
         self.simulation = fixed_parameter(node, "simulation", False)
         self.transport = fixed_parameter(node, "actuator_transport", "preview")

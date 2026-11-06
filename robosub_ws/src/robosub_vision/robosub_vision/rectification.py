@@ -1,9 +1,4 @@
-"""Recover and verify SDK image warps from matched raw/rectified tag corners.
-
-Do not substitute cv2.stereoRectify for the SDK's own image transformation.
-Fit the actual raw-to-rectified rotation in each camera and check held-out
-corners. Lens intrinsics/distortion come from the running wrapper.
-"""
+"""Fit SDK rectification maps from matched raw and rectified tag corners."""
 
 import cv2
 import numpy as np
@@ -13,7 +8,7 @@ from robosub_vision.geometry import unit
 
 
 def camera_fingerprint(raw, rect):
-    """Persist exactly the SDK K/D and rectified P that define the mapping."""
+    """Record the camera matrices used by the rectification map."""
     return np.r_[
         raw.width, raw.height, rect.width, rect.height, raw.k, raw.d, rect.p
     ]
@@ -38,8 +33,7 @@ def fit_rectification(raw_pixels, rect_pixels, k_raw, d_raw, k_rect, size):
     rect_dirs = unit(
         np.c_[rect_pixels, np.ones(len(rect_pixels))] @ np.linalg.inv(k_rect).T
     )
-    # Hold out every third corner; it is never used to fit the rotation.
-    # we don't use it because the SDK's rectification is not perfect, so we use our own analysis to check it.
+    # Reserve every third corner to check the fitted rotation.
     train = np.arange(len(raw_pixels)) % 3 != 0
     r = Rotation.align_vectors(rect_dirs[train], raw_dirs[train])[0].as_matrix()
     projected = (raw_dirs @ r.T) @ k_rect.T

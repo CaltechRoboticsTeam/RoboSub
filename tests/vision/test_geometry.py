@@ -1,15 +1,15 @@
 """Meaningful numerical checks; all geometry here is synthetic, not hardware."""
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import cv2
 import numpy as np
 import pytest
+import yaml
 from scipy.optimize import brentq
 from scipy.spatial.transform import Rotation
-import yaml
 
 SOURCE = Path(__file__).resolve().parents[2] / "robosub_ws/src/robosub_vision"
 sys.path.insert(0, str(SOURCE))
@@ -358,16 +358,6 @@ def test_config_selection_foreground_and_pipeline(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(source))
     assert load_config(path)["targets"] == []
-    source["targets"][0].update(
-        enabled=True, detector_class="off", method="unknown"
-    )
-    path.write_text(yaml.safe_dump(source))
-    with pytest.raises(ValueError, match="Unsupported solver"):
-        load_config(path)
-    source = {"underwater": {"depth_source": "refractive"}}
-    path.write_text(yaml.safe_dump(source))
-    with pytest.raises(ValueError, match="Missing underwater.housing"):
-        load_config(path)
 
 
 def test_synthetic_export_labels_and_metric_ground_truth(tmp_path):

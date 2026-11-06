@@ -1,7 +1,7 @@
-"""Ground-truth checks for a straight move followed by a stable hold."""
+"""Score a move followed by a hold."""
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -17,7 +17,7 @@ class TruthSample:
 
 
 class MoveHoldScorer:
-    """Score actual motion; these measurements never feed robot control."""
+    """Score the simulated vehicle position, speed and attitude."""
 
     def __init__(
         self,
@@ -32,22 +32,6 @@ class MoveHoldScorer:
         sample_timeout=0.25,
         tilt_tolerance=math.pi / 18,
     ):
-        values = (
-            distance,
-            depth,
-            heading,
-            hold_duration,
-            position_tolerance,
-            depth_tolerance,
-            heading_tolerance,
-            speed_tolerance,
-            sample_timeout,
-            tilt_tolerance,
-        )
-        if not all(map(math.isfinite, values)) or any(
-            value <= 0 for value in values[3:]
-        ):
-            raise ValueError("Scoring limits must be finite and positive")
         self.distance, self.depth, self.heading = distance, depth, heading
         self.hold_duration = hold_duration
         self.position_tolerance = position_tolerance

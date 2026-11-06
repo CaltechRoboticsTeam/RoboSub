@@ -15,6 +15,7 @@ setup(
         ("share/ament_index/resource_index/packages", [f"resource/{PACKAGE}"]),
         (f"share/{PACKAGE}", ["package.xml"]),
         (f"share/{PACKAGE}/launch", glob("launch/*.py")),
+        (f"share/{PACKAGE}/config", glob("config/*.yaml")),
         (f"share/{PACKAGE}/web", glob("web/*.html") + glob("web/*.js")),
     ],
     install_requires=["setuptools"],

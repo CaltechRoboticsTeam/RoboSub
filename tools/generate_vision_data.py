@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a reusable pinhole synthetic baseline, with metric pose labels."""
+"""Generate pinhole images with target pose labels."""
 
 import argparse
 

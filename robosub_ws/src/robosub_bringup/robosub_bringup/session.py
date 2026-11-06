@@ -1,16 +1,13 @@
 """Record each robot run and expose its topics to Foxglove."""
 
-from datetime import datetime, timezone
 import json
 import os
-from pathlib import Path
 import socket
 import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
 
-from ament_index_python.packages import (
-    PackageNotFoundError,
-    get_package_share_directory,
-)
+from ament_index_python.packages import get_package_share_directory
 from launch.actions import (
     DeclareLaunchArgument,
     ExecuteProcess,
@@ -31,7 +28,7 @@ SESSION_DEFAULTS = {
 
 
 def session_arguments():
-    """Share recording/connection options between robot entry points."""
+    """Declare recording and Foxglove options."""
     return [
         DeclareLaunchArgument(
             name,
@@ -46,22 +43,8 @@ def session_arguments():
     ]
 
 
-def require_package(package):
-    """Reject an incomplete environment before launching robot processes."""
-    try:
-        get_package_share_directory(package)
-    except PackageNotFoundError as error:
-        name = package.replace("_", "-")
-        raise RuntimeError(
-            f"Automatic run logging needs {package}. On the Mac, run "
-            f"'pixi add ros-humble-{name}' in ~/Developer/robosub-ros, "
-            "then setup_ros_shell. On Ubuntu Humble, install "
-            f"'ros-humble-{name}' with apt."
-        ) from error
-
-
 def session_actions(context, *, simulated, robot_actions):
-    """Start observation before the robot and stop it with the same launch."""
+    """Start recording and Foxglove with the robot."""
 
     def argument(name):
         return LaunchConfiguration(name).perform(context)
@@ -69,21 +52,12 @@ def session_actions(context, *, simulated, robot_actions):
     record = argument("record") == "true"
     foxglove = argument("foxglove") == "true"
     if record:
-        require_package("ros2bag")
-        require_package("rosbag2_storage_mcap")
+        get_package_share_directory("ros2bag")
+        get_package_share_directory("rosbag2_storage_mcap")
     if foxglove:
-        require_package("foxglove_bridge")
+        get_package_share_directory("foxglove_bridge")
         address = argument("foxglove_address")
         port = int(argument("foxglove_port"))
-        if not 1 <= port <= 65535:
-            raise ValueError("foxglove_port must be between 1 and 65535")
-        menu = (
-            argument("driver_station") == "true" or argument("teleop") != "off"
-        )
-        if menu and port == int(argument("driver_station_port")):
-            raise ValueError(
-                "Foxglove and the driver station need different ports"
-            )
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             try:
                 listener.bind((address, port))
@@ -172,9 +146,15 @@ def session_actions(context, *, simulated, robot_actions):
         "config_files": {
             name: Path(settings[name]).read_text()
             for name in ("mission_config", "vision_config")
-            if settings[name]
+            if settings.get(name)
         },
     }
+    if not simulated:
+        hardware = (
+            Path(get_package_share_directory("robosub_bringup"))
+            / "config/hardware.yaml"
+        )
+        metadata["config_files"]["hardware"] = hardware.read_text()
     (run / "run.json").write_text(json.dumps(metadata, indent=2) + "\n")
     command = [
         FindExecutable(name="ros2"),

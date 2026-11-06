@@ -1,17 +1,13 @@
-"""Small pinhole mesh renderer and shared YOLO/pose dataset export.
-
-Appearance augmentation models attenuation/backscatter, not port refraction.
-Ground truth always describes the pinhole geometry that rendered the image.
-"""
+"""Render pinhole images and export YOLO labels and target poses."""
 
 import json
 from pathlib import Path
 
 import cv2
 import numpy as np
-from scipy.spatial.transform import Rotation
 import trimesh
 import yaml
+from scipy.spatial.transform import Rotation
 
 from robosub_vision.geometry import transform_points
 
@@ -19,17 +15,13 @@ from robosub_vision.geometry import transform_points
 def load_scene(filename):
     path = Path(filename).resolve()
     data = yaml.safe_load(path.read_text())
-    if not data.get("targets"):
-        raise ValueError("Synthetic scene needs at least one target")
     data["backgrounds"] = [
         str((path.parent / p).resolve()) for p in data.get("backgrounds", [])
     ]
     for target in data["targets"]:
-        if target.get("units") not in ("meters", "millimeters"):
-            raise ValueError("Each synthetic mesh needs explicit metric units")
         mesh_path = path.parent / target["mesh"]
         target["geometry"] = trimesh.load(mesh_path, force="mesh", process=True)
-        scale = 1 if target["units"] == "meters" else 0.001
+        scale = {"meters": 1, "millimeters": 0.001}[target["units"]]
         target["geometry"].apply_scale(scale)
         if target["geometry"].is_empty:
             raise ValueError(f"Empty mesh: {mesh_path}")
@@ -117,10 +109,6 @@ def underwater_appearance(bgr, depth, rng):
 
 class DatasetWriter:
     def __init__(self, output, scene, count, seed, renderer):
-        if count < 2 * len(scene["targets"]):
-            raise ValueError(
-                "Use >=2 frames per target for both dataset splits"
-            )
         self.output = Path(output).resolve()
         self.output.mkdir(parents=True, exist_ok=False)
         self.scene = scene

@@ -1,14 +1,14 @@
-"""Passively score the configured Gazebo move/hold scenario and save JSON."""
+"""Score a simulated move and hold; save the results as JSON."""
 
-from collections import deque
-from datetime import datetime, timezone
 import json
 import math
-from pathlib import Path
 import time
+from collections import deque
+from datetime import datetime, timezone
+from pathlib import Path
 
-from nav_msgs.msg import Odometry
 import rclpy
+from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from robosub_control.autonomy.sensor_freshness import (
@@ -61,20 +61,9 @@ class MotionTest(Node):
             tilt_tolerance=math.radians(g("hold_tilt_deg")),
         )
         self.max_tilt_deg = float(g("max_tilt_deg"))
-        if not 0 < g("hold_tilt_deg") < self.max_tilt_deg < 60:
-            raise ValueError("Require 0 < hold_tilt_deg < max_tilt_deg < 60")
         self.timeout = float(g("test_timeout"))
         self.grace = float(g("completion_grace"))
         self.clock_timeout = float(g("clock_timeout"))
-        if not all(
-            math.isfinite(v) and v > 0
-            for v in (
-                self.timeout,
-                self.grace,
-                self.clock_timeout,
-            )
-        ):
-            raise ValueError("Test deadlines must be finite and positive")
         self.directory = Path(g("output_directory")).expanduser()
         self.run_stem = datetime.now(timezone.utc).strftime(
             "move5_hold-%Y%m%dT%H%M%S.%fZ"
@@ -116,7 +105,7 @@ class MotionTest(Node):
         return self.get_clock().now().nanoseconds * 1e-9
 
     def check_wall_clock(self):
-        """Keep a missing or frozen /clock from suspending test deadlines."""
+        """Fail the test if the simulation clock stops."""
         if self.finished:
             return
         value = self.now()

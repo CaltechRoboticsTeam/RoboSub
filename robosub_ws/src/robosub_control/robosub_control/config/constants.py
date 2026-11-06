@@ -1,4 +1,4 @@
-"""Shared runtime defaults; vehicle hardware lives in the named profiles."""
+"""Control defaults. Vehicle geometry is in the vehicle profiles."""
 
 DEFAULT_VEHICLE_PROFILE = "current_m5"
 

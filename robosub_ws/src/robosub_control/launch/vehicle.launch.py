@@ -1,4 +1,4 @@
-"""Launch shared thruster logic and optional autonomous control nodes."""
+"""Start thruster control and the state estimator."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
@@ -6,7 +6,6 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from robosub_control.config import constants
-from robosub_control.config.vehicle_profiles import get_profile
 
 
 def start(context):
@@ -19,9 +18,6 @@ def start(context):
     }
     manual = LaunchConfiguration("manual_control").perform(context) == "true"
     preview = LaunchConfiguration("preview_commands").perform(context) == "true"
-    simulated = (
-        LaunchConfiguration("simulate_actuators").perform(context) == "true"
-    )
     actions = [
         Node(
             package="robosub_control",
@@ -58,27 +54,12 @@ def start(context):
                 ],
             )
         )
-    estimator_parameters = dict(shared)
-    if not simulated:
-        vehicle = get_profile(LaunchConfiguration("vehicle").perform(context))
-        # The existing DVL reader already corrects velocity to the Pixhawk.
-        estimator_parameters["dvl_offset"] = list(
-            vehicle.CONTROL_BOARD_POSITION_BODY_M
-        )
-        actions.append(
-            Node(
-                package="robosub_control",
-                executable="hardware_sensors",
-                output="screen",
-                parameters=[{"use_sim_time": False}],
-            )
-        )
     actions.append(
         Node(
             package="robosub_control",
             executable="state_estimator",
             output="screen",
-            parameters=[estimator_parameters],
+            parameters=[shared],
         )
     )
     if not manual:

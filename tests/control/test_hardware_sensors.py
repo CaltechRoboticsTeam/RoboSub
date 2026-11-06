@@ -14,12 +14,11 @@ sys.path.insert(0, str(ROOT / "robosub_ws/src/robosub_control"))
 
 try:
     import rclpy
-    from mavros_msgs.msg import DebugValue
 except ImportError:
     rclpy = None
 
 
-@unittest.skipIf(rclpy is None, "ROS and mavros_msgs are required")
+@unittest.skipIf(rclpy is None, "ROS is required")
 class HardwareSensorTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -119,26 +118,22 @@ class HardwareSensorTests(unittest.TestCase):
         self.node.dvl_pub.publish.assert_called_once()
         self.assertEqual(self.node.dvl_samples.received, 10.0)
 
-    def test_pressure_prefers_usb_and_falls_back_only_on_new_mavros_input(self):
+    def test_depth_rejects_nonfinite_values_and_expires(self):
         from std_msgs.msg import Float64
 
-        self.node.on_usb_depth(Float64(data=1.5))
+        self.node.on_depth(Float64(data=1.5))
         self.now = 10.1
-        self.node.on_depth(DebugValue(name="DEPTH", value_float=2.0))
-        self.node.on_usb_depth(Float64(data=math.nan))
+        self.node.on_depth(Float64(data=math.nan))
         self.node.depth_pub.publish.assert_called_once()
         self.now = 10.6
-        self.assertFalse(self.node.usb_depth_samples.fresh(self.now))
+        self.assertFalse(self.node.depth_samples.fresh(self.now))
         self.node.depth_pub.publish.assert_called_once()
-        self.node.on_depth(DebugValue(name="DEPTH", value_float=2.0))
-        self.assertEqual(self.node.active_depth_source, "mavros")
+        self.now = 10.7
+        self.node.on_depth(Float64(data=1.6))
         self.assertEqual(self.node.depth_pub.publish.call_count, 2)
         self.assertEqual(
-            self.node.depth_pub.publish.call_args.args[0].data, 2.0
+            self.node.depth_pub.publish.call_args.args[0].data, 1.6
         )
-        self.now = 10.7
-        self.node.on_usb_depth(Float64(data=1.6))
-        self.assertEqual(self.node.active_depth_source, "usb")
 
     def test_teensy_publishes_raw_adc_even_when_depth_is_unavailable(self):
         from robosub_control.drivers.teensy_actuators import TeensyActuators
@@ -205,7 +200,7 @@ class HardwareSensorTests(unittest.TestCase):
                 String(
                     data=json.dumps(
                         {
-                            "firmware": {"protocol_version": 1},
+                            "firmware": {"protocol_version": 3},
                             "ack": {"sequence": 20},
                             "ack_age_s": 0.1,
                         }
@@ -260,35 +255,62 @@ class HardwareSensorTests(unittest.TestCase):
         self.assertIn("Duplicate", ld().message)
         self.assertEqual(ld().level, bytes([2]))
 
+    def test_dvl_serial_activity_is_not_the_same_as_valid_bottom_track(self):
+        import json
+
+        from robosub_control.drivers.hardware_diagnostics import (
+            HardwareDiagnostics,
+        )
+        from std_msgs.msg import String
+
+        diagnostics = HardwareDiagnostics()
+        self.addCleanup(diagnostics.destroy_node)
+        status = {
+            "serial_open": False,
+            "error": "No such device",
+            "packet_age_s": None,
+        }
+
+        def row():
+            diagnostics.on_sample("dvl_driver", String(data=json.dumps(status)))
+            return next(
+                item
+                for item in diagnostics.sensor_statuses()
+                if item.name.endswith("/DVL")
+            )
+
+        self.assertEqual(row().level, bytes([2]))
+        status.update(serial_open=True, received_bytes=100, error=None)
+        self.assertEqual(row().level, bytes([1]))
+        status.update(packet_age_s=0.1, error="No valid four-beam bottom track")
+        self.assertEqual(row().level, bytes([1]))
+        status["error"] = None
+        self.assertEqual(row().level, bytes([0]))
+        status["packet_age_s"] = 3.0
+        self.assertEqual(row().level, bytes([1]))
+
     def test_best_effort_hardware_messages_reach_reliable_estimator(self):
         from nav_msgs.msg import Odometry
         from rclpy.executors import SingleThreadedExecutor
         from rclpy.node import Node
-        from rclpy.parameter import Parameter
         from rclpy.qos import qos_profile_sensor_data
         from robosub_control.autonomy.state_estimator import StateEstimator
         from robosub_control.config import current_m5
         from robosub_control.drivers.hardware_sensors import HardwareSensors
         from sensor_msgs.msg import Imu
+        from std_msgs.msg import Float64
 
-        hardware = Node("fake_existing_hardware_readers")
+        hardware = Node("fake_hardware_readers")
         adapter = HardwareSensors()
-        estimator = StateEstimator(
-            parameter_overrides=[
-                Parameter(
-                    "dvl_offset",
-                    value=list(current_m5.CONTROL_BOARD_POSITION_BODY_M),
-                )
-            ]
-        )
+        estimator = StateEstimator()
         imu_pub = hardware.create_publisher(
             Imu, "/mavros/imu/data", qos_profile_sensor_data
         )
         depth_pub = hardware.create_publisher(
-            DebugValue, "/mavros/debug_value/named_value_float", 10
+            Float64, "/sub/sensors/depth_usb", 10
         )
         dvl_pub = hardware.create_publisher(
-            Odometry, "/mavros/odometry/out", 10
+            Odometry, "/sub/sensors/dvl/odometry", 10
         )
         states = []
         hardware.create_subscription(Odometry, "/sub/state", states.append, 10)
@@ -303,12 +325,12 @@ class HardwareSensorTests(unittest.TestCase):
                 imu.angular_velocity.z = 1.0
                 dvl = self.dvl()
                 dvl.header.stamp = imu.header.stamp
-                # Pure yaw at rest: legacy reader reports Pixhawk velocity.
-                rx, ry, _ = current_m5.CONTROL_BOARD_POSITION_BODY_M
+                # Pure yaw at rest produces velocity at the DVL mount.
+                rx, ry, _ = current_m5.DVL_POSITION_BODY_M
                 dvl.twist.twist.linear.x = -ry
                 dvl.twist.twist.linear.y = rx
                 imu_pub.publish(imu)
-                depth_pub.publish(DebugValue(name="DEPTH", value_float=1.25))
+                depth_pub.publish(Float64(data=1.25))
                 if estimator.rates[2] == 1.0:
                     dvl_pub.publish(dvl)
                 until = time.monotonic() + 0.02

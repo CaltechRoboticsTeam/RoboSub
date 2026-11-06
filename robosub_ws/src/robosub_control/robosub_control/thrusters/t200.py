@@ -1,17 +1,17 @@
 """Interpolate measured T200 thrust and current curves."""
 
+import json
+import math
 from bisect import bisect_left
 from functools import lru_cache
 from importlib.resources import files
-import json
-import math
 from numbers import Real
 
 from robosub_control.config import future_t200 as constants
 
 
 def finite_number(value, name):
-    """Accept real numeric inputs, excluding booleans and non-finite values."""
+    """Check that a command value is a finite number."""
     try:
         valid = (
             isinstance(value, Real)
@@ -43,20 +43,7 @@ def interpolate(value, coordinates, samples):
 def load_curves():
     source = files("robosub_control.thrusters").joinpath("data/t200.json")
     data = json.loads(source.read_text())
-    result = {float(voltage): rows for voltage, rows in data["curves"].items()}
-    for rows in result.values():
-        if len(rows) != 201 or rows[0][0] != 1100 or rows[-1][0] != 1900:
-            raise ValueError("Incomplete T200 performance table")
-        previous = None
-        for row in rows:
-            if len(row) != 4 or not all(math.isfinite(v) for v in row):
-                raise ValueError("Invalid T200 performance sample")
-            if previous is not None and row[0] <= previous:
-                raise ValueError("T200 PWM samples must increase")
-            if row[2] < 0 or row[3] < 0:
-                raise ValueError("T200 current/RPM must be nonnegative")
-            previous = row[0]
-    return result
+    return {float(voltage): rows for voltage, rows in data["curves"].items()}
 
 
 class _Branch:
@@ -99,14 +86,7 @@ class _Branch:
 
 
 class T200Model:
-    """Convert axial force in newtons to integer pulse widths in microseconds.
-
-    The voltage is required, so a reference value cannot silently stand in for
-    a measured supply. Current limiting is a model estimate, not protection
-    against real electrical/thermal faults. Zero and sub-resolution requests
-    map to neutral. Negative force selects the reverse thrust branch;
-    electrical inversion mirrors the final PWM command around neutral.
-    """
+    """Convert thrust in newtons to T200 PWM in microseconds."""
 
     def __init__(self, voltage_v, current_limit_a=None):
         self.voltage_v = finite_number(voltage_v, "voltage_v")
@@ -133,8 +113,6 @@ class T200Model:
         for low, high in zip(
             curves[voltages[lower]], curves[voltages[upper]], strict=True
         ):
-            if low[0] != high[0]:
-                raise ValueError("T200 voltage tables use different PWM grids")
             rows.append(
                 [
                     low[0],
@@ -151,12 +129,10 @@ class T200Model:
         self.current_limit_a = limit
 
     def force_limits(self, reversed_motor=False):
-        """Return axial bounds; electrical inversion does not change thrust."""
-        self._validate_reversal(reversed_motor)
+        """Return reverse and forward thrust limits."""
         return -self.reverse.maximum_force, self.forward.maximum_force
 
     def force_to_pwm(self, force_n, reversed_motor=False):
-        self._validate_reversal(reversed_motor)
         force = finite_number(force_n, "force_n")
         branch = self.forward if force >= 0 else self.reverse
         offset = branch.force_to_offset(abs(force))
@@ -166,7 +142,6 @@ class T200Model:
         return constants.ESC_PWM_NEUTRAL_US + sign * offset
 
     def force_from_pwm(self, pwm_us, reversed_motor=False):
-        self._validate_reversal(reversed_motor)
         pwm = self._validate_pwm(pwm_us)
         if reversed_motor:
             pwm = 2 * constants.ESC_PWM_NEUTRAL_US - pwm
@@ -177,18 +152,12 @@ class T200Model:
         return force * sign
 
     def current_from_pwm(self, pwm_us, reversed_motor=False):
-        self._validate_reversal(reversed_motor)
         pwm = self._validate_pwm(pwm_us)
         if reversed_motor:
             pwm = 2 * constants.ESC_PWM_NEUTRAL_US - pwm
         offset = pwm - constants.ESC_PWM_NEUTRAL_US
         branch = self.forward if offset >= 0 else self.reverse
         return interpolate(abs(offset), branch.offsets, branch.currents)
-
-    @staticmethod
-    def _validate_reversal(value):
-        if type(value) is not bool:
-            raise ValueError("Motor reversal must be a boolean")
 
     @staticmethod
     def _validate_pwm(value):

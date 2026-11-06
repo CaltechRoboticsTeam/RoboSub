@@ -4,9 +4,9 @@
 import json
 import math
 
+import rclpy
 from geometry_msgs.msg import Point, Twist
 from nav_msgs.msg import Odometry
-import rclpy
 from std_msgs.msg import Empty, Float64, String
 
 from robosub_control.autonomy.motion_profile import MotionProfile
@@ -16,7 +16,6 @@ from robosub_control.autonomy.sensor_freshness import (
 )
 from robosub_control.autonomy.state_estimator import q_to_rpy, rotate
 from robosub_control.config import constants
-from robosub_control.config.vehicle_profiles import profile_from_node
 from robosub_control.utils.tuning import TunableNode, fixed_parameter
 
 
@@ -29,9 +28,7 @@ def wrap_pi(a):
 
 
 class PID:
-    """u = kp*e + ki*int(e) - kd*rate.  Derivative acts on the MEASURED rate
-    (which the estimator already gives us), not on d(error)/dt, so a step
-    in the setpoint does not produce a spike."""
+    """PID with derivative on measured rate."""
 
     def __init__(self, kp, ki, kd, i_limit, out_limit=1.0):
         self.kp, self.ki, self.kd = kp, ki, kd
@@ -70,18 +67,11 @@ class PID:
 class DepthHeadingController(TunableNode):
     def __init__(self):
         super().__init__("depth_heading_controller")
-        profile = profile_from_node(self)
         self.manual_control = fixed_parameter(self, "manual_control", False)
         self.command_limit = 1.0
         self.rate = float(
             fixed_parameter(self, "rate", constants.CONTROLLER_DEFAULTS["rate"])
         )
-        if not (
-            constants.MIN_CONTROL_RATE_HZ
-            <= self.rate
-            <= constants.MAX_CONTROL_RATE_HZ
-        ):
-            raise ValueError("Controller rate must be between 1 and 1000 Hz")
         output_rate = float(
             fixed_parameter(
                 self,
@@ -89,14 +79,6 @@ class DepthHeadingController(TunableNode):
                 constants.CONTROLLER_DEFAULTS["output_rate"],
             )
         )
-        if not (
-            constants.MIN_CONTROL_RATE_HZ
-            <= output_rate
-            <= profile.MAX_OUTPUT_RATE_HZ
-        ):
-            raise ValueError(
-                f"Output rate must be 1-{profile.MAX_OUTPUT_RATE_HZ:g} Hz"
-            )
         self.output_rate = min(output_rate, self.rate)
         self.next_output_time = None
         self.state_timeout = float(
@@ -106,8 +88,6 @@ class DepthHeadingController(TunableNode):
                 constants.CONTROLLER_DEFAULTS["state_timeout"],
             )
         )
-        if not math.isfinite(self.state_timeout) or self.state_timeout <= 0:
-            raise ValueError("state_timeout must be finite and positive")
         self.state_freshness = SensorFreshness(self.state_timeout)
         self.max_tilt_deg = float(
             fixed_parameter(
@@ -116,17 +96,10 @@ class DepthHeadingController(TunableNode):
                 constants.CONTROLLER_DEFAULTS["max_tilt_deg"],
             )
         )
-        if (
-            not math.isfinite(self.max_tilt_deg)
-            or not 0 < self.max_tilt_deg < 60
-        ):
-            raise ValueError("max_tilt_deg must be between 0 and 60")
         for name in ("pos_max_speed", "pos_max_acceleration"):
             value = float(
                 fixed_parameter(self, name, constants.CONTROLLER_DEFAULTS[name])
             )
-            if not math.isfinite(value) or value <= 0:
-                raise ValueError(f"{name} must be finite and positive")
             setattr(self, name, value)
         for name, default in constants.CONTROLLER_DEFAULTS.items():
             if name in (
@@ -392,7 +365,7 @@ class DepthHeadingController(TunableNode):
             self.pub.publish(Twist())
 
     def position_reference(self, dt):
-        """Reacquire measured motion after an interruption, then advance."""
+        """Restart from measured motion after an interruption."""
         if self.position_needs_replan or self.motion is None:
             p, q = (
                 self.state.pose.pose.position,
@@ -426,7 +399,6 @@ class DepthHeadingController(TunableNode):
         return reference
 
     def periodic(self):
-        """Run the active hold loops on each controller timer tick."""
         if self.manual_control:
             return
         now = self.now()

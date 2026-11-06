@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report actual local runtime versions without opening a camera."""
+"""Report installed vision software."""
 
 import argparse
 import json

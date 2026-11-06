@@ -2,9 +2,9 @@
 
 import math
 import os
-from pathlib import Path
 import sys
 import unittest
+from pathlib import Path
 from unittest.mock import Mock
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -266,7 +266,7 @@ class AssistedGamepadTests(unittest.TestCase):
         self.assert_neutral()
         self.tick()
         self.tick(SELECT)
-        self.node.on_joy(Joy(axes=[0.0] * 6, buttons=[0]))
+        self.node.on_joy(Joy(axes=[0.0] * 6, buttons=[0] * 9))
         self.assertIsNone(self.node.measurement_button)
         self.assert_neutral()
 

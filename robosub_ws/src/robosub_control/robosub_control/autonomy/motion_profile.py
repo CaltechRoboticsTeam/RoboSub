@@ -1,12 +1,12 @@
-"""Planar trapezoidal references with bounded vector speed/acceleration."""
+"""Plan moves with speed and acceleration limits."""
 
+import math
 from collections import deque
 from dataclasses import dataclass
-import math
 
 
 def finite_pair(values):
-    """Return a finite XY pair without accepting truncated coordinates."""
+    """Check an XY pair for finite values."""
     pair = tuple(values)
     if len(pair) != 2 or not all(math.isfinite(value) for value in pair):
         raise ValueError("Expected two finite coordinates")
@@ -20,13 +20,7 @@ class MotionState:
 
 
 class MotionProfile:
-    """Accelerate, cruise and brake along a line, then hold its endpoint.
-
-    Short moves use a triangular velocity profile. Retargeting brakes the
-    existing reference before changing direction, preserving both position
-    and velocity continuity. An initially excessive speed is braked rather
-    than discontinuously clipped to the new speed limit.
-    """
+    """Accelerate, cruise and brake; brake before changing direction."""
 
     def __init__(self, position, velocity=(0.0, 0.0)):
         self.state = MotionState(finite_pair(position), finite_pair(velocity))
@@ -39,11 +33,6 @@ class MotionProfile:
 
     def retarget(self, goal, max_speed, max_acceleration):
         goal = finite_pair(goal)
-        if not all(
-            math.isfinite(value) and value > 0
-            for value in (max_speed, max_acceleration)
-        ):
-            raise ValueError("Motion limits must be finite and positive")
         phases = deque()
         start = self.state.position
         speed = math.hypot(*self.state.velocity)

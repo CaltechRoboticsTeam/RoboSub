@@ -1,15 +1,15 @@
-"""Apply provisional current-vehicle physics without changing hardware data."""
+"""Apply M5 vehicle physics to Gazebo."""
 
 import json
 import math
-from pathlib import Path
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import numpy as np
 
 
 def passive_pitch_audit(physics, speed_m_s=1.0):
-    """A fixed-velocity small-angle check, not a full stability proof."""
+    """Estimate pitch stability at a fixed speed."""
     buoyancy_n = (physics["mass_kg"] + physics["excess_buoyancy_kg"]) * 9.81
     restoring = buoyancy_n * physics["center_of_buoyancy_m"][2]
     difference = physics["added_mass"][2] - physics["added_mass"][0]
@@ -91,29 +91,6 @@ def _write_inertia(inertial, mass, center, tensor):
 def _load(directory):
     physics = json.loads((directory / "current_m5_physics.json").read_text())
     geometry = json.loads((directory / "current_m5_geometry.json").read_text())
-    if physics["schema_version"] != 1 or geometry["schema_version"] != 1:
-        raise ValueError("Unsupported M5 simulation model schema")
-    for name in (
-        "mass_kg",
-        "water_density_kg_m3",
-        "contact_link_mass_kg",
-    ):
-        if not math.isfinite(physics[name]) or physics[name] <= 0:
-            raise ValueError(f"Invalid simulation setting: {name}")
-    if any(
-        not math.isfinite(physics[name]) or physics[name] < 0
-        for name in ("excess_buoyancy_kg", "collision_padding_m")
-    ):
-        raise ValueError("Invalid buoyancy or collision margin")
-    for name in ("linear_damping", "quadratic_damping", "added_mass"):
-        values = physics[name]
-        if len(values) != 6 or any(
-            not math.isfinite(value) or value < 0 for value in values
-        ):
-            raise ValueError(f"Invalid six-axis model setting: {name}")
-    center = physics["center_of_buoyancy_m"]
-    if len(center) != 3 or any(not math.isfinite(value) for value in center):
-        raise ValueError("Invalid center of buoyancy")
     return physics, geometry
 
 
