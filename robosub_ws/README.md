@@ -5,8 +5,6 @@ ROS 2 Humble control with Gazebo Harmonic simulation.
 
 ## Simulation
 
-On the configured Mac:
-
 ```bash
 setup_ros_shell
 ros2 launch robosub_bringup sim_test.launch.py gui:=true plots:=false
@@ -15,8 +13,6 @@ ros2 launch robosub_bringup sim_test.launch.py gui:=true plots:=false
 This runs the Bumblebee Woollett world, dives to 1 m, moves forward 5 m,
 then holds position and depth for 10 s. A separate observer scores Gazebo
 ground truth and saves a result under `~/.ros/robosub_tests/`.
-Scores are advisory: missing a target reports measurements and exits normally.
-Deployment does not run Gazebo or use these scores as a gate.
 
 For Xbox driving instead:
 
@@ -25,7 +21,7 @@ ros2 launch robosub_bringup robot.launch.py \
   world:=bb_woollett gui:=true plots:=false teleop:=browser
 ```
 
-Open the [driver station](http://127.0.0.1:8765) and click **Enable**.
+Open the [driver station](http://127.0.0.1:8765) and click Enable.
 Sticks/triggers drive directly. Hold a face button for assistance:
 
 | Button | Action |
@@ -36,19 +32,13 @@ Sticks/triggers drive directly. Hold a face button for assistance:
 | Y | Turn clockwise 90° and hold heading/depth |
 
 Release ends assistance; sticks take over immediately. Assistance needs
-fresh depth/IMU feedback; A also needs DVL. **Disable** stops commands.
+fresh depth/IMU feedback Disable stops commands.
 
 ## Foxglove and logs
 
 Every master launch starts MCAP recording and a Foxglove bridge.
 Connect to `ws://127.0.0.1:8766`; real-robot tunneling is in the deploy guide.
 Logs live under `~/.ros/robosub_runs/<run>/bag/*.mcap`.
-
-Use Foxglove's **Parameters** panel on `/depth_heading_controller` or
-`/state_estimator`. Accepted changes affect the next callback. Copy desired
-constants into `robosub_control/config/constants.py` to keep them after restart.
-Useful plots: `/sub/reference/depth` vs `/depth`, `/sub/reference` vs
-`/sub/state`, and `/sub/state/rpy`. Camera images: `/sub/camera/image_raw`.
 
 ## Control path
 
