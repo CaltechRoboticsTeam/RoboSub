@@ -1,6 +1,11 @@
 # Teensy M5 USB bridge
 
-Current path: Jetson USB → Teensy 4.1 Serial1 → RS-485 → six VideoRay M5s.
+Current path: Jetson USB → Teensy 4.1 → MAX485 → six VideoRay M5s.
+Installed wiring: **RO → pin 2**, **DI ← pin 3**, **DE ← pin 4**,
+**/RE ← pin 5**.
+Pin 2 is an input, routed to Serial1 RX through XBAR. Pin 3 transmits using
+the bundled FlexIO serial library because it has no hardware UART TX function.
+The `rs485-serial1` build name selects the receive UART.
 Motor IDs: **FR=0, FL=1, BR=2, BL=3, RD=4, LD=6**; slots 5 and 7 stay neutral.
 USB driving bypasses PX4 arming. See the [driving guide](https://github.com/CaltechRoboticsTeam/RoboSub/blob/main/deploy/jetson/README.md).
 
@@ -55,9 +60,10 @@ this build. Power off the thruster before closing the session. A new USB
 session requires `M5-PASSTHROUGH` again. Do not paste normal `H1`/`C1` commands
 while forwarding is enabled.
 
-The receiver is disabled during transmission to suppress local echo. The
-UART interrupt releases DE at the final stop bit; a bounded wait re-enables
-reception without calling the USB event processing in `flush()`.
+During transmission, /RE is HIGH (receiver disabled) and DE is HIGH (driver
+enabled). After FlexIO finishes the final stop bit, DE goes LOW and /RE goes
+LOW to receive. A bounded wait avoids the USB event processing in `flush()`;
+a TX timeout drops DE and disables further transmission until reboot.
 
 For binary tools, enable with `M5-BINARY` instead. Every subsequent byte,
 including Ctrl-], is forwarded unchanged. Closing USB ends this mode;
@@ -119,8 +125,8 @@ A 250 ms watchdog or USB disconnect sends neutral; re-enabling requires a
 fresh neutral command. Pressure calibration is preserved from the supplied
 sketch; ADC values ≤1 are unavailable.
 
-The supplied wiring/settings use DE=3, RE=2, A0 pressure, 115200 baud,
-group address `0x81`. The firmware scans Node IDs 0–127 for replies.
+The bus uses 115200 baud and group address `0x81`.
+The firmware scans Node IDs 0–127 for replies.
 [VideoRay command reference](https://download.videoray.com/documentation/m5_thruster/html/commands_responses.html).
 
 ## Collect depth calibration data

@@ -5,12 +5,18 @@
 #include "hardware_config.h"
 #include "protocol.h"
 
+#if ROBOSUB_RS485_SERIAL != 0
+#include <FlexSerial.h>
+#endif
+
 namespace {
 
 static_assert(robosub::kMaxDeltaUs == 500, "USB capability must match limit");
 
-constexpr int kDriverEnablePin = 3;
-constexpr int kReceiverEnablePin = 2;
+constexpr int kDriverEnablePin = 4;
+constexpr int kReceiverEnablePin = 5;
+constexpr int kReceiverOutputPin = 2;
+constexpr int kDriverInputPin = 3;
 constexpr int kPressurePin = A10;  // Teensy 4.1 pin 24.
 constexpr uint32_t kBusBaud = 115200;
 #if ROBOSUB_RS485_SERIAL == 2
@@ -18,6 +24,60 @@ HardwareSerialIMXRT& thruster_serial = Serial2;
 #else
 HardwareSerialIMXRT& thruster_serial = Serial1;
 #endif
+
+#if ROBOSUB_RS485_SERIAL != 0
+// Pin 3 has no UART TX function. Reserve FlexIO timer/shifter 0 for TX;
+// Serial1/Serial2 receives pin 2 through the Teensy XBAR.
+class BusTransmitter : public FlexSerial {
+ public:
+  BusTransmitter()
+      : FlexSerial(-1, kDriverInputPin, 0xff, 0xff, 0xff, 0xff, 0, 0) {}
+
+  void Begin() {
+    begin(kBusBaud);
+    ready_ = static_cast<bool>(*this);
+  }
+
+  bool Transmit(const uint8_t* packet, size_t length) {
+    // Queue the entire bounded packet without entering Print's blocking wait.
+    if (!ready_ || length == 0 || length >= TX_BUFFER_SIZE ||
+        static_cast<size_t>(availableForWrite()) < length) {
+      return false;
+    }
+    digitalWrite(kReceiverEnablePin, HIGH);
+    digitalWrite(kDriverEnablePin, HIGH);
+    write(packet, length);
+    const uint32_t started_us = micros();
+    IMXRT_FLEXIO_t& port = flexIOHandlerTX()->port();
+    // FlexSerial clears timer interrupt 0 after the final stop bit. Avoid
+    // flush()/yield() so USB processing cannot delay the return to receive.
+    while (((port.SHIFTSIEN | port.TIMIEN) & 1U) != 0) {
+      if (micros() - started_us >= 7000) {
+        ready_ = false;
+        break;
+      }
+    }
+    digitalWrite(kDriverEnablePin, LOW);
+    digitalWrite(kReceiverEnablePin, LOW);
+    return ready_;
+  }
+
+ private:
+  bool ready_ = false;
+};
+
+BusTransmitter bus_transmitter;
+#endif
+
+bool TransmitBusPacket(const uint8_t* packet, size_t length) {
+#if ROBOSUB_RS485_SERIAL != 0
+  return bus_transmitter.Transmit(packet, length);
+#else
+  (void)packet;
+  (void)length;
+  return false;
+#endif
+}
 
 #if ROBOSUB_RS485_PASSTHROUGH
 
@@ -123,23 +183,8 @@ void PassthroughLoop() {
     outgoing[length++] = static_cast<uint8_t>(byte);
   }
   if (length > 0) {
-    digitalWrite(kReceiverEnablePin, HIGH);
-    thruster_serial.write(outgoing, length);
-    // flush() calls yield(), which can delay enabling RX past a fast reply.
-    // DE is released by the UART ISR at the final stop bit. Wait without
-    // yielding, but leave interrupts enabled and bound a stuck transmission.
-    constexpr uint32_t kTxTimeoutUs =
-        sizeof(outgoing) * 10 * 1000000UL / kBusBaud + 2000;
-    const uint32_t started_us = micros();
-    while (digitalRead(kDriverEnablePin) != LOW) {
-      if (micros() - started_us >= kTxTimeoutUs) {
-        digitalWrite(kDriverEnablePin, LOW);
-        passthrough_active = false;
-        break;
-      }
-    }
-    digitalWrite(kReceiverEnablePin, LOW);
-    if (!passthrough_active) {
+    if (!TransmitBusPacket(outgoing, length)) {
+      passthrough_active = false;
       Serial.println("TX timeout: forwarding disabled.");
     }
   }
@@ -166,21 +211,11 @@ uint32_t last_capture_ms = 0;
 bool bus_tx_failed = false;
 
 bool Transmit(const uint8_t* packet, size_t length) {
-  digitalWrite(kReceiverEnablePin, HIGH);
-  thruster_serial.write(packet, length);
-  // The UART ISR releases DE at the final stop bit. Avoid flush()/yield(),
-  // which delayed RX enough to lose the first byte in field captures.
-  const uint32_t started_us = micros();
-  while (digitalRead(kDriverEnablePin) != LOW) {
-    if (micros() - started_us >= 7000) {
-      digitalWrite(kDriverEnablePin, LOW);
-      digitalWrite(kReceiverEnablePin, LOW);
-      controller.Stop();
-      bus_tx_failed = true;
-      return false;
-    }
+  if (!TransmitBusPacket(packet, length)) {
+    controller.Stop();
+    bus_tx_failed = true;
+    return false;
   }
-  digitalWrite(kReceiverEnablePin, LOW);
   return true;
 }
 
@@ -310,12 +345,16 @@ void HandleLine() {
 
 void setup() {
   pinMode(kDriverEnablePin, OUTPUT);
-  pinMode(kReceiverEnablePin, OUTPUT);
   digitalWrite(kDriverEnablePin, LOW);
+  pinMode(kReceiverEnablePin, OUTPUT);
   digitalWrite(kReceiverEnablePin, LOW);
+  pinMode(kReceiverOutputPin, INPUT);
+  pinMode(kDriverInputPin, INPUT);
+
 #if ROBOSUB_RS485_PASSTHROUGH
   thruster_serial.begin(kBusBaud, SERIAL_8N1);
-  thruster_serial.transmitterEnable(kDriverEnablePin);
+  thruster_serial.setRX(kReceiverOutputPin);
+  bus_transmitter.Begin();
   thruster_serial.addMemoryForRead(passthrough_rx_memory,
                                    sizeof(passthrough_rx_memory));
 #else
@@ -323,9 +362,10 @@ void setup() {
   // Receive-only diagnostics on both UARTs; DE remains low in USB-only mode.
   Serial1.begin(kBusBaud);
   Serial2.begin(kBusBaud);
-  if (ROBOSUB_RS485_SERIAL != 0) {
-    thruster_serial.transmitterEnable(kDriverEnablePin);
-  }
+  thruster_serial.setRX(kReceiverOutputPin);
+#if ROBOSUB_RS485_SERIAL != 0
+  bus_transmitter.Begin();
+#endif
   Drive();
 #endif
 }
