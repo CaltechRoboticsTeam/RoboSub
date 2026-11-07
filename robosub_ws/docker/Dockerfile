@@ -1,6 +1,6 @@
 # ROS 2 Humble + Gazebo Harmonic — matches the Jetson's distro so sim code
 # and vehicle code stay identical.
-FROM osrf/ros:humble-desktop-full
+FROM osrf/ros:humble-desktop
 
 ARG DEBIAN_FRONTEND=noninteractive
 
