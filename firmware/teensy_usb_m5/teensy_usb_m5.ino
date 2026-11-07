@@ -11,7 +11,7 @@ static_assert(robosub::kMaxDeltaUs == 500, "USB capability must match limit");
 
 constexpr int kDriverEnablePin = 3;
 constexpr int kReceiverEnablePin = 2;
-constexpr int kPressurePin = A0;
+constexpr int kPressurePin = A10;  // Teensy 4.1 pin 24.
 constexpr uint32_t kBusBaud = 115200;
 #if ROBOSUB_RS485_SERIAL == 2
 HardwareSerialIMXRT& thruster_serial = Serial2;

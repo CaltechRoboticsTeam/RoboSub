@@ -1,6 +1,6 @@
 # Defaults from the saved Jetson startup; verify against the actual devices.
 # Prefer the identified /dev/serial/by-id/ path for the DVL adapter.
-mavros:
+mavros_node:
   ros__parameters:
     fcu_url: /dev/ttyTHS1:115200
     gcs_url: ""
@@ -10,7 +10,7 @@ mavros:
 
 dvl_reader:
   ros__parameters:
-    device: /dev/ttyUSB0
+    device: /dev/serial/by-id/usb-FTDI_USB-RS232_Cable_FTWV85B1-if00-port0
     baud: 115200
     start_stream: true
     # CS starts the saved setup; no factory reset or persistent writes.
