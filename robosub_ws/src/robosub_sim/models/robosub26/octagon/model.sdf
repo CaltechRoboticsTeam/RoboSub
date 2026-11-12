@@ -1,0 +1,110 @@
+<?xml version="1.0"?>
+<sdf version="1.11">
+  <model name="robosub26_octagon">
+    <static>1</static>
+
+    <link name="octagon">
+      <pose>0 0 0 0 0 0</pose>
+      <visual name="octagon_vis">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://octagon/octagon.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <collision name="octagon_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://octagon/octagon.dae</uri>
+          </mesh>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="box_rescue">
+      <pose>-1.37 0 -0.2 0 0 -1.57</pose>
+      <visual name="box_rescue_vis">
+        <geometry>
+          <box>
+            <size>0.305 0.01 0.305</size>
+          </box>
+        </geometry>
+        <material>
+          <diffuse>1.0 1.0 1.0</diffuse>
+          <specular>1.0 1.0 1.0</specular>
+          <pbr>
+            <metal>
+              <albedo_map>file://media/materials/textures/robosub26/Task05_Rescue.png</albedo_map>
+              <emissive_map>file://media/materials/textures/robosub26/Task05_Rescue.png</emissive_map>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+    </link>
+
+    <link name="box_repair">
+      <pose>1.37 0 -0.2 0 0 1.57</pose>
+      <visual name="box_repair_vis">
+        <geometry>
+          <box>
+            <size>0.305 0.01 0.305</size>
+          </box>
+        </geometry>
+        <material>
+          <diffuse>1.0 1.0 1.0</diffuse>
+          <specular>1.0 1.0 1.0</specular>
+          <pbr>
+            <metal>
+              <albedo_map>file://media/materials/textures/robosub26/Task05_Repair.png</albedo_map>
+              <emissive_map>file://media/materials/textures/robosub26/Task05_Repair.png</emissive_map>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+    </link>
+
+    <link name="box_search">
+      <pose>0 1.37 -0.2 0 0 0</pose>
+      <visual name="box_search_vis">
+        <geometry>
+          <box>
+            <size>0.305 0.01 0.305</size>
+          </box>
+        </geometry>
+        <material>
+          <diffuse>1.0 1.0 1.0</diffuse>
+          <specular>1.0 1.0 1.0</specular>
+          <pbr>
+            <metal>
+              <albedo_map>file://media/materials/textures/robosub26/Task05_Search.png</albedo_map>
+              <emissive_map>file://media/materials/textures/robosub26/Task05_Search.png</emissive_map>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+    </link>
+
+    <link name="box_survey">
+      <pose>0 -1.37 -0.2 0 0 3.14</pose>
+      <visual name="box_survey_vis">
+        <geometry>
+          <box>
+            <size>0.305 0.01 0.305</size>
+          </box>
+        </geometry>
+        <material>
+          <diffuse>1.0 1.0 1.0</diffuse>
+          <specular>1.0 1.0 1.0</specular>
+          <pbr>
+            <metal>
+              <albedo_map>file://media/materials/textures/robosub26/Task05_Survey.png</albedo_map>
+              <emissive_map>file://media/materials/textures/robosub26/Task05_Survey.png</emissive_map>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

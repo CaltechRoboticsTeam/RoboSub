@@ -1,0 +1,119 @@
+<?xml version="1.0"?>
+<sdf version="1.11">  <model name="robosub_bin_cover">
+    <link name="cover">
+      <inertial>
+        <mass>0.1</mass>
+        <inertia>
+          <ixx>0.0004</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.001</iyy>
+          <iyz>0</iyz>
+          <izz>0.001</izz>
+        </inertia>
+      </inertial>
+
+      <visual name="top">
+        <pose>0 0 0.02 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.3556 0.2032 0.02</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Orange</name>
+          </script>
+        </material>
+      </visual>
+
+      <collision name="top_collide">
+        <pose>0 0 0.02 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.3556 0.2032 0.02</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="htop">
+        <pose>0 0 0.1016 1.5707 0 1.5707</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.00635</radius>
+            <length>0.2032</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Purple</name>
+          </script>
+        </material>
+      </visual>
+
+      <collision name="htop_collide">
+        <pose>0 0 0.1016 1.5707 0 1.5707</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.00635</radius>
+            <length>0.2032</length>
+          </cylinder>
+        </geometry>
+      </collision>
+
+      <visual name="u1">
+        <pose>0.1016 0 0.0508 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.00635</radius>
+            <length>0.1016</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Purple</name>
+          </script>
+        </material>
+      </visual>
+
+      <collision name="u1_collide">
+        <pose>0.1016 0 0.0508 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.00635</radius>
+            <length>0.1016</length>
+          </cylinder>
+        </geometry>
+      </collision>
+
+      <visual name="u2">
+        <pose>-0.1016 0 0.0508 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.00635</radius>
+            <length>0.1016</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Purple</name>
+          </script>
+        </material>
+      </visual>
+
+      <collision name="u2_collide">
+        <pose>-0.1016 0 0.0508 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.00635</radius>
+            <length>0.1016</length>
+          </cylinder>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<sdf version="1.11">  <model name="robosub23_torpedo_panel_v1">
+    <static>1</static>
+
+    <include>
+      <uri>model://robosub23_torpedo_panel</uri>
+    </include>
+
+    <link name="box_buoy">
+      <visual name="box_buoy_vis">
+        <pose>0 0 1.1096 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://robosub23_torpedo_panel_v1/v1.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <collision name="box_buoy_collide">
+        <pose>0 0 1.1096 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://robosub23_torpedo_panel_v1/v1.dae</uri>
+          </mesh>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

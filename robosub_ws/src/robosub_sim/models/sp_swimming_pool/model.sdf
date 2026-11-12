@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+
+<sdf version="1.11">
+  <model name="sp_swimming_pool">
+    <static>true</static>
+    <link name="link">
+
+      <visual name="pool">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <!-- The URI should refer to the 3D mesh. The "model:"
+                URI scheme indicates that the we are referencing a Gazebo
+                model. -->
+            <uri>model://sp_swimming_pool/meshes/sppool.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+
+      <collision name="pool_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://sp_swimming_pool/meshes/sppool.stl</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <collision name="pool_base">
+        <pose>0 0 -2.05 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>50 25 0.1</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

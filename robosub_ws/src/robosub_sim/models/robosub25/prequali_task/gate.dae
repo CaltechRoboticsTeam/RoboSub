@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+  <asset>
+    <contributor>
+      <author>Generated</author>
+      <authoring_tool>Custom</authoring_tool>
+    </contributor>
+    <created>2026-01-02T00:00:00</created>
+    <modified>2026-01-02T00:00:00</modified>
+    <up_axis>Y_UP</up_axis>
+    <unit name="millimeter" meter="0.01"/>
+
+  </asset>
+
+  <library_effects>
+    <effect id="effect_gate">
+      <profile_COMMON>
+        <technique sid="common">
+          <lambert>
+            <diffuse>
+              <color>0.35 0.35 0.35 1</color>
+            </diffuse>
+          </lambert>
+        </technique>
+      </profile_COMMON>
+    </effect>
+  </library_effects>
+
+  <library_materials>
+    <material id="mat_gate" name="mat_gate">
+      <instance_effect url="#effect_gate"/>
+    </material>
+  </library_materials>
+
+  <library_geometries>
+    <geometry id="geometry_gate" name="geometry_gate">
+      <mesh>
+        <!-- POSITIONS: reused from your original pos_0-array -->
+        <source id="pos_0">
+          <float_array id="pos_0-array" count="72">
+5 115 105 0 115 105 2.5 57.5 105 0 0 105 5 0 105 5 115 -105 0 115 -105 2.5 115 0 5 0 -105 0 0 -105 2.5 57.5 -105 5 0 -100 0 0 -100 2.5 0 -102.5 5 110 -100 0 110 -100 2.5 55 -100 5 110 100 0 110 100 2.5 110 0 5 0 100 0 0 100 2.5 55 100 2.5 0 102.5
+          </float_array>
+          <technique_common>
+            <accessor source="#pos_0-array" count="24" stride="3">
+              <param name="X" type="float"/>
+              <param name="Y" type="float"/>
+              <param name="Z" type="float"/>
+            </accessor>
+          </technique_common>
+        </source>
+
+        <!-- NORMALS: reused from your original norm_0-array -->
+        <source id="norm_0">
+          <float_array id="norm_0-array" count="18">
+0 0 1 0 1 0 0 0 -1 0 -1 0 1 0 0 -1 0 0
+          </float_array>
+          <technique_common>
+            <accessor source="#norm_0-array" count="6" stride="3">
+              <param name="X" type="float"/>
+              <param name="Y" type="float"/>
+              <param name="Z" type="float"/>
+            </accessor>
+          </technique_common>
+        </source>
+
+        <vertices id="vert_0">
+          <input semantic="POSITION" source="#pos_0"/>
+        </vertices>
+
+        <!-- TRIANGLES: reused your p data unchanged -->
+        <triangles count="44" material="mat_gate">
+          <input semantic="VERTEX" source="#vert_0" offset="0"/>
+          <input semantic="NORMAL" source="#norm_0" offset="1"/>
+          <p>
+0 0 1 0 2 0 2 0 1 0 3 0 2 0 3 0 4 0 4 0 0 0 2 0 5 1 6 1 7 1 7 1 6 1 1 1 7 1 1 1 0 1 0 1 5 1 7 1 8 2 9 2 10 2 10 2 9 2 6 2 10 2 6 2 5 2 5 2 8 2 10 2 11 3 12 3 13 3 13 3 12 3 9 3 13 3 9 3 8 3 8 3 11 3 13 3 14 0 15 0 16 0 16 0 15 0 12 0 16 0 12 0 11 0 11 0 14 0 16 0 17 3 18 3 19 3 19 3 18 3 15 3 19 3 15 3 14 3 14 3 17 3 19 3 20 2 21 2 22 2 22 2 21 2 18 2 22 2 18 2 17 2 17 2 20 2 22 2 4 3 3 3 23 3 23 3 3 3 21 3 23 3 21 3 20 3 20 3 4 3 23 3 20 4 17 4 4 4 4 4 17 4 0 4 0 4 17 4 14 4 0 4 14 4 5 4 5 4 14 4 8 4 8 4 14 4 11 4 21 5 3 5 18 5 18 5 3 5 1 5 18 5 1 5 6 5 18 5 6 5 15 5 15 5 6 5 9 5 15 5 9 5 12 5
+          </p>
+        </triangles>
+      </mesh>
+    </geometry>
+  </library_geometries>
+
+  <library_visual_scenes>
+    <visual_scene id="Scene">
+      <node id="GateNode" name="GateNode">
+        <!-- Identity transform; scale in SDF if needed -->
+        <matrix>1 0 0 0  0 1 0 0  0 0 1 0  0 0 0 1</matrix>
+        <instance_geometry url="#geometry_gate">
+          <bind_material>
+            <technique_common>
+              <instance_material symbol="mat_gate" target="#mat_gate"/>
+            </technique_common>
+          </bind_material>
+        </instance_geometry>
+      </node>
+    </visual_scene>
+  </library_visual_scenes>
+
+  <scene>
+    <instance_visual_scene url="#Scene"/>
+  </scene>
+</COLLADA>

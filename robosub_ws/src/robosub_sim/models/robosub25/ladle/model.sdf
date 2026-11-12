@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<sdf version="1.11">
+  <model name="robosub25_ladle">
+    <link name="ladle">
+      <pose>0 0 0 0 0 0</pose>
+      <mass value="0.5"/>
+      <visual name="ladle_vis">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://robosub25/ladle/ladle.obj</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <collision name="ladle_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.221 0.0427 0.0543</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+
+    <plugin
+      filename="gz-sim-hydrodynamics-system"
+      name="gz::sim::systems::Hydrodynamics">
+      <link_name>ladle</link_name>
+      <enable_coriolis>false</enable_coriolis>
+      <water_density>1025.0</water_density>
+    </plugin>
+  </model>
+</sdf>

@@ -1,0 +1,45 @@
+<?xml version="1.0" ?>
+<sdf version="1.11">
+  <model name="torpedo">
+    <static>false</static>
+    <link name="link">
+      <inertial>
+        <mass>0.1</mass>
+        <inertia>
+          <ixx>0.000011</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>0.00019</iyy><iyz>0</iyz>
+          <izz>0.00019</izz>
+        </inertia>
+      </inertial>
+
+      <visual name="torpedo_visual">
+        <pose>0 0 0 0 1.5708 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.015</radius>
+            <length>0.15</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>0.9 0.1 0.1 1</ambient>
+          <diffuse>0.9 0.1 0.1 1</diffuse>
+        </material>
+      </visual>
+
+      <collision name="torpedo_collision">
+        <pose>0 0 0 0 1.5708 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.015</radius>
+            <length>0.15</length>
+          </cylinder>
+        </geometry>
+      </collision>
+    </link>
+
+    <plugin
+        filename="gz-sim-velocity-control-system"
+        name="gz::sim::systems::VelocityControl">
+    </plugin>
+  </model>
+</sdf>

@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<sdf version="1.11">  <model name="robosub_bin_earth">
+    <static>1</static>
+
+    <include>
+      <uri>model://robosub_bin</uri>
+    </include>
+
+    <link name="box_info">
+      <visual name="box_info_vis">
+        <pose>0 0 0.01 0 0 1.5707</pose>
+        <geometry>
+          <box>
+            <size>0.6096 0.3048 0.02</size>
+          </box>
+        </geometry>
+        <material>
+          <diffuse>1.0 1.0 1.0</diffuse>
+          <specular>1.0 1.0 1.0</specular>
+          <pbr>
+            <metal>
+              <albedo_map>file://media/materials/textures/robosub25/Task03_DropBRUVS.png</albedo_map>
+              <emissive_map>file://media/materials/textures/robosub25/Task03_DropBRUVS.png</emissive_map>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

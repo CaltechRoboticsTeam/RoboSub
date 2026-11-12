@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<!-- Model for the short navigation course -->
+<sdf version="1.11">
+  <model name="rsyc_platform">
+    <link name="platform">
+      <pose>0 0 0 0 0 0</pose>
+      <visual name="Platform_visual">
+          <geometry>
+              <mesh>
+                  <uri>meshes/rsyc_platform.dae</uri>
+              </mesh>
+          </geometry>
+      </visual>
+      <collision name="Platform_collision">
+        <geometry>
+            <mesh>
+                <uri>meshes/rsyc_platform.dae</uri>
+            </mesh>
+        </geometry>
+      </collision>
+      <inertial>
+        <pose>146.7 40 -20 0 0 0</pose>
+        <mass>2000000</mass>
+        <inertia>
+          <ixx>6666668333.33</ixx>
+          <iyy>1666668333.33</iyy>
+          <izz>8333333333.33</izz>
+          <ixy>0.01</ixy>
+          <ixz>0.01</ixz>
+          <iyz>0.01</iyz>
+        </inertia>
+      </inertial>
+    </link>
+  </model>
+</sdf>

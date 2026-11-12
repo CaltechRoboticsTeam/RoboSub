@@ -1,0 +1,221 @@
+<?xml version="1.0"?>
+<sdf version="1.11">  <model name="robosub_bin">
+    <static>1</static>
+
+    <link name="rim">
+      <visual name="edge1">
+        <pose>0.2286 0 0.1524 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.1524 0.6096 0.01</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+
+      <collision name="edge1_collide">
+        <pose>0.2286 0 0.1524 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.1524 0.6096 0.01</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="edge2">
+        <pose>-0.2286 0 0.1524 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.1524 0.6096 0.01</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+
+      <collision name="edge2_collide">
+        <pose>-0.2286 0 0.1524 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.1524 0.6096 0.01</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="edge3">
+        <pose>0 0.381 0.1524 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.6096 0.1524 0.01</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+
+      <collision name="edge3_collide">
+        <pose>0 0.381 0.1524 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.6096 0.1524 0.01</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="edge4">
+        <pose>0 -0.381 0.1524 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.6096 0.1524 0.01</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+
+      <collision name="edge4_collide">
+        <pose>0 -0.381 0.1524 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.6096 0.1524 0.01</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="bin">
+      <visual name="bottom">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.3048 0.6096 0.02</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/FlatBlack</name>
+          </script>
+        </material>
+      </visual>
+
+      <collision name="bottom_collide">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.3048 0.6096 0.02</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="side1">
+        <pose>0.1524 0 0.0762 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.02 0.6096 0.1524</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/FlatBlack</name>
+          </script>
+        </material>
+      </visual>
+
+      <collision name="side1_collide">
+        <pose>0.1524 0 0.0762 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.02 0.6096 0.1524</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="side2">
+        <pose>-0.1524 0 0.0762 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.02 0.6096 0.1524</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/FlatBlack</name>
+          </script>
+        </material>
+      </visual>
+
+      <collision name="side2_collide">
+        <pose>-0.1524 0 0.0762 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.02 0.6096 0.1524</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="side3">
+        <pose>0 0.3048 0.0762 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.3048 0.02 0.1524</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/FlatBlack</name>
+          </script>
+        </material>
+      </visual>
+
+      <collision name="side3_collide">
+        <pose>0 0.3048 0.0762 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.3048 0.02 0.1524</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="side4">
+        <pose>0 -0.3048 0.0762 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.3048 0.02 0.1524</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/FlatBlack</name>
+          </script>
+        </material>
+      </visual>
+
+      <collision name="side4_collide">
+        <pose>0 -0.3048 0.0762 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.3048 0.02 0.1524</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

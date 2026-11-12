@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<sdf version="1.11">  <model name="sauvc_blue_drum">
+    <static>true</static>
+    <link name="link">
+
+      <collision name="blue_drum_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://sauvc_blue_drum/blue_drum.dae</uri>
+          </mesh>
+
+        </geometry>
+      </collision>
+
+
+      <visual name="blue_drum">
+        <cast_shadows>false</cast_shadows>
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://sauvc_blue_drum/blue_drum.dae</uri>
+          </mesh>
+        </geometry>
+        <!-- <material name="red_drum">
+          <color rgba="1.0 0.0 0.0 1.0"/>
+        </material> -->
+      </visual>
+
+    </link>
+  </model>
+</sdf>

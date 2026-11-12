@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<sdf version="1.11">
+  <model name="robosub25_bottle">
+    <link name="bottle">
+      <pose>0 0 0 0 0 0</pose>
+      <mass value="0.5"/>
+      <visual name="bottle_vis">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://robosub25/bottle/bottle.obj</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <collision name="bottle_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.06 0.06 0.18</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+
+    <plugin
+      filename="gz-sim-hydrodynamics-system"
+      name="gz::sim::systems::Hydrodynamics">
+      <link_name>bottle</link_name>
+      <enable_coriolis>false</enable_coriolis>
+      <water_density>1025.0</water_density>
+    </plugin>
+  </model>
+</sdf>

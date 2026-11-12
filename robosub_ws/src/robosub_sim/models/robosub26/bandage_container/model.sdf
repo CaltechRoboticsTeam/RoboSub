@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<sdf version="1.11">
+  <model name="robosub26_bandage_container">
+    <static>1</static>
+
+    <link name="bandage_container_link">
+      <visual name="bandage_container_visual">
+        <pose>0 0 0.015 1.57 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://robosub26/bandage_container/bandage_container.glb</uri>
+          </mesh>
+        </geometry>
+      </visual>
+
+      <collision name="bandage_container_collision">
+        <pose>0 0 0.015 1.57 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.085 0.085 0.03</size>
+          </box>
+        </geometry>
+      </collision>
+
+    </link>
+  </model>
+</sdf>
+

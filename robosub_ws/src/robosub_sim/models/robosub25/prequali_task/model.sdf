@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<sdf version="1.11">
+  <model name="robosub25_prequali_task">
+    <static>1</static>
+
+    <link name="prequali_task">
+      <pose>0 0 0 0 0 0</pose>
+      <visual name="gate">
+        <pose>0 0 0 1.57 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://robosub25/prequali_task/gate.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <collision name="gate_collision">
+        <pose>0 0 0 1.57 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://robosub25/prequali_task/gate.dae</uri>
+          </mesh>
+        </geometry>
+      </collision>
+
+      <visual name="pillar">
+        <pose>10 0 0 1.57 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://robosub25/prequali_task/pillar.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <collision name="pillar_collision">
+        <pose>10 0 0 1.57 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://robosub25/prequali_task/pillar.dae</uri>
+          </mesh>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

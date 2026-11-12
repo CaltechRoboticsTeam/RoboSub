@@ -1,0 +1,147 @@
+<?xml version="1.0"?>
+<sdf version="1.11">  <model name="robosub_swimming_pool_2022">
+    <static>true</static>
+    <link name="link">
+      <visual name="ground">
+        <cast_shadows>false</cast_shadows>
+        <pose>0 0 -2.05 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>50 25 0.1</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://materials/scripts/tiles.material</uri>
+            <name>SAUVC2019/Tiles</name>
+          </script>
+        </material>
+      </visual>
+
+      <collision name="ground">
+        <pose>0 0 -2.05 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>50 25 0.1</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="surface">
+        <cast_shadows>false</cast_shadows>
+        <pose>0 0 -0.05 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>50 25 0.1</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://materials/scripts/water.material</uri>
+            <name>SAUVC2019/StaticWater</name>
+          </script>
+        </material>
+      </visual>
+
+      <visual name="north">
+        <cast_shadows>false</cast_shadows>
+        <pose>25.05 0 -1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.1 25 2</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://materials/scripts/tiles.material</uri>
+            <name>SAUVC2019/Tiles</name>
+          </script>
+        </material>
+      </visual>
+
+      <collision name="north">
+        <pose>25.05 0 -1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.1 25 2</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="south">
+        <cast_shadows>false</cast_shadows>
+        <pose>-25.05 0 -1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.1 25 2</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://materials/scripts/tiles.material</uri>
+            <name>SAUVC2019/Tiles</name>
+          </script>
+        </material>
+      </visual>
+
+      <collision name="south">
+        <pose>-25.05 0 -1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.1 25 2</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="east">
+        <cast_shadows>false</cast_shadows>
+        <pose>0 -12.55 -1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>50 0.1 2</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://materials/scripts/tiles.material</uri>
+            <name>SAUVC2019/Tiles</name>
+          </script>
+        </material>
+      </visual>
+
+      <collision name="east">
+        <pose>0 -12.55 -1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>50 0.1 2</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="west">
+        <cast_shadows>false</cast_shadows>
+        <pose>0 12.55 -1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>50 0.1 2</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://materials/scripts/tiles.material</uri>
+            <name>SAUVC2019/Tiles</name>
+          </script>
+        </material>
+      </visual>
+
+      <collision name="west">
+        <pose>0 12.55 -1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>50 0.1 2</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

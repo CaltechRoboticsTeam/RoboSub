@@ -1,0 +1,13 @@
+material TexturedShape/spirits
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+        texture ../textures/spirits.png
+      }
+    }
+  }
+}

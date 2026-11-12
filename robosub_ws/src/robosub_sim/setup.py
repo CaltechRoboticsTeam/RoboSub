@@ -1,7 +1,24 @@
 from setuptools import setup
 from glob import glob
+import os
+from pathlib import Path
 
 package_name = 'robosub_sim'
+
+def package_files(directory, dest_dir):
+    paths = []
+    if os.path.exists(directory):
+        for path, directories, filenames in os.walk(directory):
+            for filename in filenames:
+                file_path = os.path.join(path, filename)
+                rel_path = os.path.relpath(file_path, directory)
+                target_dir = os.path.join(dest_dir, os.path.dirname(rel_path))
+                paths.append((target_dir, [file_path]))
+    
+    d = {}
+    for dest, files in paths:
+        d.setdefault(dest, []).extend(files)
+    return list(d.items())
 
 setup(
     name=package_name,
@@ -11,10 +28,13 @@ setup(
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/worlds', glob('worlds/*.sdf')),
-        ('share/' + package_name + '/config', glob('config/*.yaml')),
+        ('share/' + package_name + '/config', glob('config/*.yaml') + glob('config/*.json')),
         ('share/' + package_name + '/launch', glob('launch/*.py')),
+        *package_files('models', 'share/' + package_name + '/models'),
+        *package_files('meshes', 'share/' + package_name + '/meshes'),
+        *package_files('media', 'share/' + package_name + '/media'),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'numpy'],
     zip_safe=True,
     maintainer='crt',
     maintainer_email='timzhang2018@gmail.com',

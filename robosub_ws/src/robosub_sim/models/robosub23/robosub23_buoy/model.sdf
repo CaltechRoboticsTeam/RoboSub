@@ -1,0 +1,139 @@
+<?xml version="1.0"?>
+<sdf version="1.11">  <model name="robosub23_buoy">
+    <static>1</static>
+
+    <link name="buoy_top">
+      <pose>0 0 1.7192 0 1.5707 0</pose>
+      <visual name="buoy_top_vis">
+        <geometry>
+          <cylinder>
+            <radius>0.0127</radius>
+            <length>1.2192</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+      <collision name="buoy_top_collide">
+        <geometry>
+          <cylinder>
+            <radius>0.0127</radius>
+            <length>1.2192</length>
+          </cylinder>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="buoy_bottom">
+      <pose>0 0 0.5 0 1.5707 0</pose>
+      <visual name="buoy_bottom_vis">
+        <geometry>
+          <cylinder>
+            <radius>0.0127</radius>
+            <length>1.2192</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+      <collision name="buoy_bottom_collide">
+        <geometry>
+          <cylinder>
+            <radius>0.0127</radius>
+            <length>1.2192</length>
+          </cylinder>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="buoy_side_left">
+      <pose>-0.6096 0 1.1096 0 0 0</pose>
+      <visual name="buoy_side_left_vis">
+        <geometry>
+          <cylinder>
+            <radius>0.0127</radius>
+            <length>1.2192</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+      <collision name="buoy_side_left_collide">
+        <geometry>
+          <cylinder>
+            <radius>0.0127</radius>
+            <length>1.2192</length>
+          </cylinder>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="buoy_side_right">
+      <pose>0.6096 0 1.1096 0 0 0</pose>
+      <visual name="buoy_side_right_vis">
+        <geometry>
+          <cylinder>
+            <radius>0.0127</radius>
+            <length>1.2192</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+      <collision name="buoy_side_right_collide">
+        <geometry>
+          <cylinder>
+            <radius>0.0127</radius>
+            <length>1.2192</length>
+          </cylinder>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="buoy_mooring_left">
+      <pose>-0.6096 0 0.25 0 0 0</pose>
+      <visual name="buoy_mooring_left_vis">
+        <geometry>
+          <cylinder>
+            <radius>0.001</radius>
+            <length>0.5</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>0 0 0 1</ambient>
+          <diffuse>0 0 0 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+    </link>
+
+    <link name="buoy_mooring_right">
+      <pose>0.6096 0 0.25 0 0 0</pose>
+      <visual name="buoy_mooring_right_vis">
+        <geometry>
+          <cylinder>
+            <radius>0.001</radius>
+            <length>0.5</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>0 0 0 1</ambient>
+          <diffuse>0 0 0 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

@@ -1,0 +1,28 @@
+<?xml version="1.0" ?>
+<sdf version="1.11">
+  <model name="sauvc_qualification_gate">
+    <static>true</static>
+    <link name="link">
+      <collision name="qualification_gate_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://sauvc_qualification_gate/qualification_gate.dae</uri>
+          </mesh>
+        </geometry>
+      </collision>
+
+      <visual name="qualification_gate">
+        <cast_shadows>false</cast_shadows>
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://sauvc_qualification_gate/qualification_gate.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>

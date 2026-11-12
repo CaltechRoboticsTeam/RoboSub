@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<sdf version="1.11">
+  <model name="transdec">
+    <static>true</static>
+    <link name="link">
+      <visual name="ground_visual">
+        <cast_shadows>false</cast_shadows>
+        <pose>0 0 -12.1 1.57079632679 0 0</pose>
+        <geometry>
+          <!-- The mesh tag indicates that we will use a 3D mesh as
+                a visual -->
+          <mesh>
+            <!-- The URI should refer to the 3D mesh. The "model:"
+                URI scheme indicates that the we are referencing a Gazebo
+                model. -->
+            <uri>model://transdec/mesh/transdec_test.obj</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <collision name="ground">
+        <pose>0 0 -12.1 1.57079632679 0 0</pose>
+        <geometry>
+          <!-- The mesh tag indicates that we will use a 3D mesh as
+                a visual -->
+            <!-- The URI should refer to the 3D mesh. The "model:"
+                URI scheme indicates that the we are referencing a Gazebo
+                model. -->
+          <!-- Error where dartsim doesn't support mesh -->
+          <!-- <mesh>
+            <uri>model://transdec/mesh/transdec_test_collision.obj</uri>
+          </mesh> -->
+        </geometry>
+        <!-- <surface>
+          <contact>
+            <collide_bitmask>65534</collide_bitmask>
+          </contact>
+        </surface> -->
+      </collision>
+
+      <!-- <visual name="surface">
+        <cast_shadows>false</cast_shadows>
+        <pose>0 0 -0.06 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>100 100 .1</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://materials/scripts/water.material</uri>
+            <name>UUVSimulator/StaticDeepWater</name>
+          </script>
+        </material>
+      </visual> -->
+    </link>
+  </model>
+</sdf>

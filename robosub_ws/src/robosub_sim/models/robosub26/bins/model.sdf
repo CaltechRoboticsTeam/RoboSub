@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<sdf version="1.11">
+  <model name="robosub26_bins">
+    <static>1</static>
+
+    <link name="bins_link">
+      <visual name="bins_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://robosub26/bins/bins.glb</uri>
+          </mesh>
+        </geometry>
+      </visual>
+
+      <collision name="bins_collision">
+        <pose>0 -0.68 0.42 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.95 1.45 0.88</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <!-- Lightbox marker visuals (flat ring: inner 0.35 / outer 0.4), driven by gz_led_plugin -->
+      <visual name="lightbox_1_visual">
+        <pose>-0.37208 0.034618 0.6868 -0.785 0 0</pose>
+        <geometry>
+          <mesh><uri>model://robosub26/bins/led_ring.glb</uri></mesh>
+        </geometry>
+        <material>
+          <ambient>1 0 0 1</ambient>
+          <diffuse>1 0 0 1</diffuse>
+          <specular>1 0 0 1</specular>
+          <emissive>1 0 0 1</emissive>
+        </material>
+      </visual>
+
+      <visual name="lightbox_2_visual">
+        <pose>0.383884 -1.403056 0.277355 0.785 0 0</pose>
+        <geometry>
+          <mesh><uri>model://robosub26/bins/led_ring.glb</uri></mesh>
+        </geometry>
+        <material>
+          <ambient>1 0 0 1</ambient>
+          <diffuse>1 0 0 1</diffuse>
+          <specular>1 0 0 1</specular>
+          <emissive>1 0 0 1</emissive>
+        </material>
+      </visual>
+
+    </link>
+
+    <!-- LED plugin: switch modes at runtime by publishing the mode name to
+         gz topic  /bin/change_led_mode  (gz.msgs.StringMsg). E.g.:
+           gz topic -t /bin/change_led_mode -m gz.msgs.StringMsg -p 'data: "green"'
+           gz topic -t /bin/change_led_mode -m gz.msgs.StringMsg -p 'data: "red"'
+    -->
+    <plugin filename="libgz_led_plugin.so" name="gz::sim::systems::LedPlugin">
+      <led_group_name>bin</led_group_name>
+      <led name="lightbox_1">
+        <visual_name>bins_link::lightbox_1_visual</visual_name>
+      </led>
+      <led name="lightbox_2">
+        <visual_name>bins_link::lightbox_2_visual</visual_name>
+      </led>
+      <startup_mode>red</startup_mode>
+      <mode name="red">
+        <active_leds>
+          <led>lightbox_1</led>
+          <led>lightbox_2</led>
+        </active_leds>
+        <step always_on="true">
+          <color>1 0 0 1</color>
+          <intensity>1.0</intensity>
+        </step>
+      </mode>
+      <mode name="green">
+        <active_leds>
+          <led>lightbox_1</led>
+          <led>lightbox_2</led>
+        </active_leds>
+        <step always_on="true">
+          <color>0 1 0 1</color>
+          <intensity>1.0</intensity>
+        </step>
+      </mode>
+    </plugin>
+  </model>
+</sdf>
+

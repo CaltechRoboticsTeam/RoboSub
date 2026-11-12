@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<sdf version="1.11">
+  <model name="sauvc_gate">
+    <link name="link">
+    <static>true</static> 
+    <collision name="gate_collision">
+      <pose>0 0 0 0 0 0</pose>
+      <geometry>
+        <mesh>
+          <scale>1 1 1</scale>
+          <uri>model://sauvc_gate/gate.dae</uri>
+        </mesh>
+      </geometry>
+    </collision>
+
+    <visual name="gate">
+      <cast_shadows>false</cast_shadows>
+      <pose>0 0 0 0 0 0</pose>
+      <geometry>
+        <mesh>
+          <scale>1 1 1</scale>
+          <uri>model://sauvc_gate/gate.dae</uri>
+        </mesh>
+      </geometry>
+    </visual>
+    </link>
+  </model>
+</sdf>

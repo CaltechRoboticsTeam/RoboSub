@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<sdf version="1.11">  <model name="robosub_bin_spirits">
+    <static>1</static>
+
+    <include>
+      <uri>model://robosub_bin</uri>
+    </include>
+
+    <link name="box_spirits">
+      <visual name="box_spirits_vis">
+        <pose>0 0 0.01 0 0 1.5707</pose>
+        <geometry>
+          <box>
+            <size>0.6096 0.3048 0.02</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://materials/scripts/spirits.material</uri>
+            <name>TexturedShape/spirits</name>
+          </script>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

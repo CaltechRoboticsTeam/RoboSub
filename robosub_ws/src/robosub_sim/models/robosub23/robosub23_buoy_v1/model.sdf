@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<sdf version="1.11">  <model name="robosub23_buoy_v1">
+    <static>1</static>
+
+    <include>
+      <uri>model://robosub23_buoy</uri>
+    </include>
+
+    <link name="box_front">
+      <pose>0 -0.01 1.1096 0 0 0</pose>
+      <visual name="box_front_vis">
+        <geometry>
+          <box>
+            <size>1.1684 0.01 1.1684</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://materials/scripts/robosub23_symbols.material</uri>
+            <name>TexturedShape/2023_buoy1</name>
+          </script>
+        </material>
+      </visual>
+      <collision name="box_front_collide">
+        <geometry>
+          <box>
+            <size>1.1684 0.01 1.1684</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+    <link name="box_back">
+      <pose>0 0.01 1.1096 0 0 3.1415926535897932</pose>
+      <visual name="box_back_vis">
+        <geometry>
+          <box>
+            <size>1.1684 0.01 1.1684</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>file://materials/scripts/robosub23_symbols.material</uri>
+            <name>TexturedShape/2023_buoy2</name>
+          </script>
+        </material>
+      </visual>
+      <collision name="box_back_collide">
+        <geometry>
+          <box>
+            <size>1.1684 0.01 1.1684</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

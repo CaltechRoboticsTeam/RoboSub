@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <asset>
+    <contributor>
+      <author>BB</author>
+    </contributor>
+    <created>2026-04-16T00:00:00</created>
+    <modified>2026-04-16T00:00:00</modified>
+    <unit name="meter" meter="1"/>
+    <up_axis>Z_UP</up_axis>
+  </asset>
+  <library_effects>
+    <effect id="Redcross-effect">
+      <profile_COMMON>
+        <newparam sid="task05_redcross_png-surface">
+          <surface type="2D">
+            <init_from>task05_redcross_png</init_from>
+          </surface>
+        </newparam>
+        <newparam sid="task05_redcross_png-sampler">
+          <sampler2D>
+            <source>task05_redcross_png-surface</source>
+          </sampler2D>
+        </newparam>
+        <technique sid="common">
+          <lambert>
+            <emission>
+              <color sid="emission">0 0 0 1</color>
+            </emission>
+            <diffuse>
+              <texture texture="task05_redcross_png-sampler" texcoord="UVMap"/>
+            </diffuse>
+            <index_of_refraction>
+              <float sid="ior">1.45</float>
+            </index_of_refraction>
+          </lambert>
+        </technique>
+      </profile_COMMON>
+    </effect>
+  </library_effects>
+  <library_images>
+    <image id="task05_redcross_png" name="task05_redcross_png">
+      <init_from>Task05_RedCross.png</init_from>
+    </image>
+  </library_images>
+  <library_materials>
+    <material id="Redcross-material" name="Redcross">
+      <instance_effect url="#Redcross-effect"/>
+    </material>
+  </library_materials>
+  <library_geometries>
+    <geometry id="DecalPlane-mesh" name="DecalPlane">
+      <mesh>
+        <source id="DecalPlane-mesh-positions">
+          <float_array id="DecalPlane-mesh-positions-array" count="12">-0.08 -0.08 0 0.08 -0.08 0 0.08 0.08 0 -0.08 0.08 0</float_array>
+          <technique_common>
+            <accessor source="#DecalPlane-mesh-positions-array" count="4" stride="3">
+              <param name="X" type="float"/>
+              <param name="Y" type="float"/>
+              <param name="Z" type="float"/>
+            </accessor>
+          </technique_common>
+        </source>
+        <source id="DecalPlane-mesh-normals">
+          <float_array id="DecalPlane-mesh-normals-array" count="3">0 0 1</float_array>
+          <technique_common>
+            <accessor source="#DecalPlane-mesh-normals-array" count="1" stride="3">
+              <param name="X" type="float"/>
+              <param name="Y" type="float"/>
+              <param name="Z" type="float"/>
+            </accessor>
+          </technique_common>
+        </source>
+        <source id="DecalPlane-mesh-map-0">
+          <float_array id="DecalPlane-mesh-map-0-array" count="8">0 0 1 0 1 1 0 1</float_array>
+          <technique_common>
+            <accessor source="#DecalPlane-mesh-map-0-array" count="4" stride="2">
+              <param name="S" type="float"/>
+              <param name="T" type="float"/>
+            </accessor>
+          </technique_common>
+        </source>
+        <vertices id="DecalPlane-mesh-vertices">
+          <input semantic="POSITION" source="#DecalPlane-mesh-positions"/>
+        </vertices>
+        <triangles material="Redcross-material" count="2">
+          <input semantic="VERTEX" source="#DecalPlane-mesh-vertices" offset="0"/>
+          <input semantic="NORMAL" source="#DecalPlane-mesh-normals" offset="1"/>
+          <input semantic="TEXCOORD" source="#DecalPlane-mesh-map-0" offset="2" set="0"/>
+          <p>0 0 0 1 0 1 2 0 2 0 0 0 2 0 2 3 0 3</p>
+        </triangles>
+      </mesh>
+    </geometry>
+  </library_geometries>
+  <library_visual_scenes>
+    <visual_scene id="Scene" name="Scene">
+      <node id="DecalPlane" name="DecalPlane" type="NODE">
+        <matrix sid="transform">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>
+        <instance_geometry url="#DecalPlane-mesh" name="DecalPlane">
+          <bind_material>
+            <technique_common>
+              <instance_material symbol="Redcross-material" target="#Redcross-material">
+                <bind_vertex_input semantic="UVMap" input_semantic="TEXCOORD" input_set="0"/>
+              </instance_material>
+            </technique_common>
+          </bind_material>
+        </instance_geometry>
+      </node>
+    </visual_scene>
+  </library_visual_scenes>
+  <scene>
+    <instance_visual_scene url="#Scene"/>
+  </scene>
+</COLLADA>

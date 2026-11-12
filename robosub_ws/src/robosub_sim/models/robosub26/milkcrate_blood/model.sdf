@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<sdf version="1.11">
+  <model name="robosub26_milkcrate_blood">
+    <static>1</static>
+
+    <include>
+      <uri>model://robosub26/milkcrate</uri>
+    </include>
+
+    <link name="blood_overlay_link">
+      <visual name="blood_overlay_visual">
+        <pose>0 0 0.05 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.305 0.305 0.002</size>
+          </box>
+        </geometry>
+        <material>
+          <diffuse>1.0 1.0 1.0 1.0</diffuse>
+          <specular>0.1 0.1 0.1 1.0</specular>
+          <pbr>
+            <metal>
+              <albedo_map>file://media/materials/textures/robosub26/Task03_Blood.png</albedo_map>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>
+

@@ -1,0 +1,13 @@
+material TexturedShape/badge
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+        texture ../textures/badge.png
+      }
+    }
+  }
+}

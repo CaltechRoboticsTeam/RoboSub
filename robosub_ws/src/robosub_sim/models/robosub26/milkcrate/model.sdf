@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+<sdf version="1.11">
+  <model name="robosub26_milkcrate">
+    <static>1</static>
+
+    <link name="milkcrate_link">
+      <visual name="milkcrate_visual">
+        <pose>0 0 0 1.5708 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://robosub26/milkcrate/clevermade.glb</uri>
+          </mesh>
+        </geometry>
+      </visual>
+
+      <collision name="milkcrate_collision">
+        <pose>0 0 0 1.5708 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.3302 0.3302 0.2794</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="panel_front_visual">
+        <pose>0 0.1701 0.08 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.3302 0.01 0.127</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+
+      <visual name="panel_back_visual">
+        <pose>0 -0.1701 0.08 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.3302 0.01 0.127</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+
+      <visual name="panel_left_visual">
+        <pose>0.1701 0 0.08 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.01 0.3302 0.127</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+
+      <visual name="panel_right_visual">
+        <pose>-0.1701 0 0.08 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.01 0.3302 0.127</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>
+

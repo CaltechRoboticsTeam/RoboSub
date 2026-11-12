@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<sdf version='1.7'>
+  <model name='robosub26_collection_table'>
+    <static>true</static>
+      
+      
+      
+
+
+    <link name='base_link'>
+      <pose frame=''>0 0 0 0 -0 0</pose>
+      <inertial>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <mass>1</mass>
+        <inertia>
+          <ixx>0.166667</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.166667</iyy>
+          <iyz>0</iyz>
+          <izz>0.166667</izz>
+        </inertia>
+      </inertial>
+
+
+      
+      <collision name='base_link_collision'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>file://robosub26/collection_table/collection_table.dae</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='base_link_visual'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>file://robosub26/collection_table/collection_table.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name='basket_redcross_decal_visual'>
+        <pose frame=''>0.43195 0 -0.12 1.5708 -0 -1.5708</pose>
+        <geometry>
+          <mesh>
+            <uri>file://robosub26/collection_table/task05_red_cross.glb</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name='basket_warning_decal_visual'>
+        <pose frame=''>-0.43315 0 -0.12 1.5708 0 1.5708</pose>
+        <geometry>
+          <mesh>
+            <uri>file://robosub26/collection_table/task05_warning.glb</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>

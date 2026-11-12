@@ -1,0 +1,13 @@
+material TexturedShape/gman
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+        texture ../textures/gman.png
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<sdf version="1.11">
+  <model name="sauvc_orange_flare">
+    <static>false</static>
+    <link name="link">
+      <collision name="orange_flare_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://sauvc_orange_flare/orange_flare.dae</uri>
+          </mesh>
+        </geometry>
+      </collision>
+
+      <visual name="orange_flare">
+        <cast_shadows>false</cast_shadows>
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://sauvc_orange_flare/orange_flare.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>

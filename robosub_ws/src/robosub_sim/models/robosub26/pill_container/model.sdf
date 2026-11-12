@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<sdf version="1.11">
+  <model name="robosub26_pill_container">
+    <static>1</static>
+
+    <link name="pill_container_link">
+      <visual name="pill_container_visual">
+        <pose>0 0 0.0275 1.57 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://robosub26/pill_container/pill_container.glb</uri>
+          </mesh>
+        </geometry>
+      </visual>
+
+      <collision name="pill_container_collision">
+        <pose>0 0 0.0275 1.57 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.04</radius>
+            <length>0.055</length>
+          </cylinder>
+        </geometry>
+      </collision>
+
+    </link>
+  </model>
+</sdf>
+

@@ -1,0 +1,13 @@
+material TexturedShape/info
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+        texture ../textures/info.png
+      }
+    }
+  }
+}
