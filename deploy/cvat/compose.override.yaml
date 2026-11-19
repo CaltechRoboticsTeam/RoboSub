@@ -1,0 +1,73 @@
+# Used with the pinned upstream docker-compose.yml, not on its own.
+x-managed-service: &managed-service
+  restart: unless-stopped
+  logging:
+    driver: local
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  # Reset each fixed upstream name so Compose uses this project's namespace.
+  cvat_db:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_redis_inmem:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_redis_ondisk:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_server:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_worker_utils:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_worker_import:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_worker_export:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_worker_annotation:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_worker_webhooks:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_worker_quality_reports:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_worker_chunks:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_worker_consensus:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_ui:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_opa:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_clickhouse:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_vector:
+    <<: *managed-service
+    container_name: !reset null
+  cvat_grafana:
+    <<: *managed-service
+    container_name: !reset null
+  traefik:
+    <<: *managed-service
+    container_name: !reset null
+    ports: !override
+      - "${CVAT_LISTEN_IP}:${CVAT_PORT}:8080"
+    environment:
+      TRAEFIK_PROVIDERS_DOCKER_NETWORK: robosub-cvat
+
+networks:
+  cvat:
+    name: robosub-cvat

@@ -1,0 +1,86 @@
+Applies to MDSKiel/calibmar at 5c5a8200b42b22bac4e1ff62d066c1373a5ce57b.
+
+Calibmar is licensed under the new BSD license. Note that this text
+refers only to the license for Calibmar itself, independent of its dependencies,
+which are separately licensed. Building Calibmar with these dependencies may
+affect the resulting Calibmar license.
+
+    Copyright (c) 2024, Kiel University.
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+        1. Redistributions of source code must retain the above copyright
+           notice, this list of conditions and the following disclaimer.
+
+        2. Redistributions in binary form must reproduce the above copyright
+           notice, this list of conditions and the following disclaimer in the
+           documentation and/or other materials provided with the distribution.
+
+        3. Neither the name of the copyright holder nor the names of
+           its contributors may be used to endorse or promote products derived
+           from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
+    LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+    CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+--- a/src/calibmar/extractors/aruco_board_extractor.cpp
++++ b/src/calibmar/extractors/aruco_board_extractor.cpp
+@@ -1,6 +1,33 @@
+ #include "calibmar/extractors/aruco_board_extractor.h"
+
++#include <stdexcept>
++
+ namespace {
++  int AprilTagCornerShift() {
++    // Calibmar needs a top-left corner origin across OpenCV versions.
++    auto dictionary = cv::aruco::getPredefinedDictionary(
++        cv::aruco::DICT_APRILTAG_36h11);
++    cv::Mat marker, image;
++    cv::aruco::drawMarker(dictionary, 0, 160, marker);
++    cv::copyMakeBorder(marker, image, 20, 20, 20, 20,
++                       cv::BORDER_CONSTANT, cv::Scalar(255));
++    std::vector<std::vector<cv::Point2f>> corners;
++    std::vector<int> ids;
++    cv::aruco::detectMarkers(image, dictionary, corners, ids);
++    if (ids.size() != 1 || corners.size() != 1 ||
++        corners[0].size() != 4) {
++      throw std::runtime_error("Cannot determine AprilTag corner order");
++    }
++    int shift = 0;
++    for (int i = 1; i < 4; ++i) {
++      if (corners[0][i].x + corners[0][i].y <
++          corners[0][shift].x + corners[0][shift].y) {
++        shift = i;
++      }
++    }
++    return shift;
++  }
++
+   bool CloseToBorder(const cv::Point2f& corner, int min_distance, int image_width, int image_height) {
+     return corner.x < min_distance || corner.y < min_distance || corner.x > image_width - min_distance ||
+            corner.y > image_height - min_distance;
+@@ -118,9 +144,11 @@
+       std::vector<Eigen::Vector2d> corners;
+       corners.reserve(marker_corners[i].size());
+       for (size_t j = 0; j < marker_corners[i].size(); j++) {
+-        // for apriltag the opencv detector sets the origin to the bottom right,
+-        // which is inconsistent with Aruco, so shift them to match top left origin
+-        size_t j2 = is_apriltag ? (j + 2) % 4 : j;  // 2, 3, 0, 1 : 0, 1, 2, 3
++        size_t j2 = j;
++        if (is_apriltag) {
++          static const int april_shift = AprilTagCornerShift();
++          j2 = (j + static_cast<size_t>(april_shift)) % 4;
++        }
+         const auto& corner = marker_corners[i][j2];
+         // OpenCV usually uses the convetion of 0,0 being the pixel center, while colmap uses 0.5,0.5 as center
+         Eigen::Vector2d point2D(corner.x + 0.5, corner.y + 0.5);

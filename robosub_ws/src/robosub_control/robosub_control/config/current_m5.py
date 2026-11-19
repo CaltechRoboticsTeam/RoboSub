@@ -1,0 +1,107 @@
+"""Current M5 vehicle geometry, motor IDs and output limits."""
+
+import math
+
+from robosub_control.config.thruster_layout import (
+    THRUSTER_NAMES as THRUSTER_NAMES,
+)
+from robosub_control.config.thruster_layout import (
+    THRUSTER_TOPIC_IDS as THRUSTER_TOPIC_IDS,
+)
+from robosub_control.config.thruster_layout import (
+    THRUSTERS as THRUSTERS,
+)
+
+
+def onshape_to_body(position):
+    """Rotate Onshape coordinates 180 degrees about z."""
+    x, y, z = position
+    return (-x, -y, z)
+
+
+THRUSTER_POSITIONS_ONSHAPE_M = {
+    "FL": (-0.352, -0.229, 0.033),
+    "FR": (-0.352, 0.215, 0.033),
+    "BR": (0.352, 0.215, 0.033),
+    "BL": (0.352, -0.229, 0.033),
+    "LD": (-0.012, -0.301, -0.014),
+    "RD": (-0.012, 0.287, -0.014),
+}
+THRUSTER_YAW_CW_DEG = {
+    "FL": 45.0,
+    "FR": 315.0,
+    "BR": 225.0,
+    "BL": 135.0,
+    "LD": 0.0,
+    "RD": 0.0,
+}
+THRUSTER_PITCH_DOWN_DEG = {
+    name: 90.0 if name in ("LD", "RD") else 0.0 for name in THRUSTER_NAMES
+}
+THRUSTER_POSITIONS_BODY_M = {
+    name: onshape_to_body(position)
+    for name, position in THRUSTER_POSITIONS_ONSHAPE_M.items()
+}
+
+DVL_POSITION_ONSHAPE_M = (0.153, -0.007, -0.016)
+DVL_POSITION_BODY_M = onshape_to_body(DVL_POSITION_ONSHAPE_M)
+DVL_MOUNT_PITCH_DOWN_DEG = 90.0
+
+# Measured Pixhawk location on the current M5 vehicle.
+CONTROL_BOARD_POSITION_ONSHAPE_M = (0.0, -0.006, 0.049)
+CONTROL_BOARD_POSITION_BODY_M = onshape_to_body(
+    CONTROL_BOARD_POSITION_ONSHAPE_M
+)
+CAMERA_OFFSET_FROM_BOARD_ONSHAPE_M = (6.185760 * 0.0254, 0.0, -4.0 * 0.0254)
+CAMERA_POSITION_ONSHAPE_M = tuple(
+    a + b
+    for a, b in zip(
+        CONTROL_BOARD_POSITION_ONSHAPE_M,
+        CAMERA_OFFSET_FROM_BOARD_ONSHAPE_M,
+        strict=True,
+    )
+)
+CAMERA_POSITION_BODY_M = onshape_to_body(CAMERA_POSITION_ONSHAPE_M)
+CAMERA_RPY_BODY_RAD = (0.0, 0.0, 0.0)
+CAMERA_ORIENTATION_CONFIRMED = False
+
+# RPY for a mount axis uses right-hand ROS rotations, not optical image axes.
+DVL_MOUNT_RPY_BODY_RAD = (0.0, math.pi / 2.0, 0.0)
+SIM_DVL_OFFSET_M = DVL_POSITION_BODY_M
+
+NAME = "current_m5"
+ACTUATOR_KIND = "m5"
+GEOMETRY_CONFIRMED = True
+# Front polarity inferred from reported surge cancellation and sway/yaw swap.
+THRUSTER_REVERSED = {
+    "FR": True,
+    "FL": True,
+    "BR": False,
+    "BL": False,
+    "RD": False,
+    "LD": False,
+}
+THRUSTER_DIRECTIONS_CONFIRMED = False
+# Motor IDs select array slots; reply node ID is a separate protocol field.
+M5_MOTOR_IDS = {"FR": 0, "FL": 1, "BR": 2, "BL": 3, "RD": 4, "LD": 6}
+M5_REPLY_NODE_ID = None
+M5_SUPPLY_VOLTAGE_V = 24.0
+M5_POWER_TO_FORCE_CALIBRATION = "data/m5.json"
+M5_PROPELLER_DIAMETER_M = 0.090
+# Software publication policy, not a manufacturer-rated update limit.
+MAX_OUTPUT_RATE_HZ = 100.0
+TARGET_TOPIC = "/sub/m5/force_targets"
+INDIVIDUAL_TOPIC_PREFIX = "/sub/m5/force"
+PREVIEW_TOPIC = "/sub/m5/power_preview"
+SENT_TOPIC = "/sub/m5/power_sent"
+NEUTRAL_COMMAND = 0.0
+INITIAL_NEUTRAL_S = 0.0
+
+# Axis limits use calibrated forward/reverse forces and measured moment arms.
+MIXER_AXIS_FRACTIONS = {
+    "surge": 1.0,
+    "sway": 1.0,
+    "heave": 1.0,
+    "roll": 1.0,
+    "yaw": 1.0,
+}

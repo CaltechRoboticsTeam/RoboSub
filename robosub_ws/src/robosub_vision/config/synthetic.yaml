@@ -1,0 +1,18 @@
+image_size: [640, 480]
+focal_px: 550
+distance: [0.5, 2.0]
+targets:
+  - name: example_box
+    mesh: ../models/example_box.stl
+    units: meters
+  - name: example_panel
+    mesh: ../models/example_panel.stl
+    units: meters
+    landmarks:
+      - [-0.2, -0.15, 0]
+      - [0.2, -0.15, 0]
+      - [0.2, 0.15, 0]
+      - [-0.2, 0.15, 0]
+  - name: example_cylinder
+    mesh: ../models/example_cylinder.stl
+    units: meters

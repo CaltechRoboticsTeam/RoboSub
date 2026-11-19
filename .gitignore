@@ -45,6 +45,7 @@ npm-debug.log*
 # Python and MkDocs
 __pycache__/
 *.py[cod]
+*.egg-info/
 .venv/
 venv/
 site/
@@ -54,6 +55,14 @@ build/
 install/
 log/
 .colcon/
+robosub_ws/src/zed-ros2-wrapper/
+
+# Local vision sessions, datasets, weights and calibration artifacts
+.ruff_cache/
+.pytest_cache/
+vision_data/
+robosub_ws/src/robosub_vision/config/calibration/
+*.engine
 
 # Coverage and test output
 .cache/

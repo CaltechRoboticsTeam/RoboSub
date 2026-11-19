@@ -1,0 +1,3 @@
+# Keep modem probes away from this robot's USB command channel.
+ATTRS{idVendor}=="16c0", ATTRS{serial}=="19620450", \
+  ENV{ID_MM_DEVICE_IGNORE}="1", ENV{ID_MM_PORT_IGNORE}="1"

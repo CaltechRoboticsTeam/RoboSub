@@ -1,0 +1,7 @@
+# Scoped to new vision code; ROS Humble uses Python 3.10.
+target-version = "py310"
+line-length = 80
+[lint]
+select = ["E", "F", "I", "B"]
+[lint.isort]
+force-sort-within-sections = true

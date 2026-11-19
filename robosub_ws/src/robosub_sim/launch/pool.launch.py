@@ -1,51 +1,145 @@
-"""Bring up the whole SIM: Gazebo + bridge + sensor stand-ins + the vehicle stack.
+"""Start Gazebo and vehicle control."""
 
-    ros2 launch robosub_sim pool.launch.py          # with GUI
-    ros2 launch robosub_sim pool.launch.py gui:=false
+import tempfile
+from pathlib import Path
 
-The vehicle stack (mixer, estimator, controller) comes from vehicle.launch.py,
-the same file the Jetson runs, so what you test here is what drives the sub.
-This file only adds what the sim needs instead of hardware.
-"""
-import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument,
+    ExecuteProcess,
+    IncludeLaunchDescription,
+    OpaqueFunction,
+    RegisterEventHandler,
+    Shutdown,
+)
+from launch.event_handlers import OnProcessExit, OnShutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from robosub_control.config import constants
+from robosub_sim.simulation_world import configured_world, environment_floor_z
+
+
+def start_world(context):
+    package = Path(get_package_share_directory("robosub_sim"))
+    environment = LaunchConfiguration("world").perform(context)
+    text = configured_world(
+        (package / "worlds/pool.sdf").read_text(),
+        package / "meshes",
+        LaunchConfiguration("vehicle").perform(context),
+        environment=environment,
+    )
+    with tempfile.NamedTemporaryFile(
+        mode="w", prefix="robosub-world-", suffix=".sdf", delete=False
+    ) as file:
+        file.write(text)
+        world = Path(file.name)
+
+    def cleanup(_context):
+        world.unlink(missing_ok=True)
+        return []
+
+    # Native macOS requires server and GUI in separate processes.
+    processes = [
+        ExecuteProcess(
+            cmd=["gz", "sim", "-s", "-r", str(world)],
+            name="gazebo_server",
+            output="screen",
+        )
+    ]
+    if LaunchConfiguration("gui").perform(context) == "true":
+        processes.append(
+            ExecuteProcess(
+                cmd=["gz", "sim", "-g"],
+                name="gazebo_gui",
+                output="screen",
+            )
+        )
+    sensors = []
+    for executable in ("depth_sensor", "dvl_sensor"):
+        parameters = {
+            "use_sim_time": True,
+            "vehicle_profile": LaunchConfiguration("vehicle"),
+        }
+        if executable == "dvl_sensor":
+            parameters["floor_z"] = environment_floor_z(environment)
+        sensors.append(
+            Node(
+                package="robosub_sim",
+                executable=executable,
+                output="screen",
+                parameters=[parameters],
+            )
+        )
+    return [
+        RegisterEventHandler(
+            OnShutdown(on_shutdown=[OpaqueFunction(function=cleanup)])
+        ),
+        *[
+            RegisterEventHandler(
+                OnProcessExit(
+                    target_action=process,
+                    on_exit=[Shutdown(reason="Gazebo stopped")],
+                )
+            )
+            for process in processes
+        ],
+        *processes,
+        *sensors,
+    ]
 
 
 def generate_launch_description():
-    pkg = get_package_share_directory('robosub_sim')
-    world = os.path.join(pkg, 'worlds', 'pool.sdf')
-    bridge_cfg = os.path.join(pkg, 'config', 'bridge.yaml')
-
-    gui = LaunchConfiguration('gui')
-
-    # "-r" runs immediately, "-s" is server-only (headless).
-    gz = ExecuteProcess(
-        cmd=['gz', 'sim', '-r', PythonExpression(
-            ["'' if '", gui, "' == 'true' else '-s'"]), world],
-        output='screen',
-    )
-
-    # Gazebo topics <-> ROS topics (odom, imu, altimeter, camera, thrust).
+    package = Path(get_package_share_directory("robosub_sim"))
     bridge = Node(
-        package='ros_gz_bridge',
-        executable='parameter_bridge',
-        parameters=[{'config_file': bridge_cfg}],
-        output='screen',
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        parameters=[{"config_file": str(package / "config/bridge.yaml")}],
+        output="screen",
     )
-
-    # Sensor stand-ins: the drivers the real vehicle has, faked from Gazebo.
-    depth = Node(package='robosub_sim', executable='depth_sensor', output='screen')   # altimeter -> /depth
-    dvl = Node(package='robosub_sim', executable='dvl_sensor', output='screen')       # ground truth -> /dvl/*
-
     vehicle = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(pkg, 'launch', 'vehicle.launch.py')))
-
-    return LaunchDescription([
-        DeclareLaunchArgument('gui', default_value='true'),
-        gz, bridge, depth, dvl, vehicle,
-    ])
+        PythonLaunchDescriptionSource(
+            str(
+                Path(get_package_share_directory("robosub_control"))
+                / "launch/vehicle.launch.py"
+            )
+        ),
+        launch_arguments={
+            "vehicle": LaunchConfiguration("vehicle"),
+            "manual_control": LaunchConfiguration("manual_control"),
+            "use_sim_time": "true",
+            "simulate_actuators": "true",
+            "control_rate": LaunchConfiguration("control_rate"),
+            "output_rate": LaunchConfiguration("output_rate"),
+            "max_power": LaunchConfiguration("max_power"),
+        }.items(),
+    )
+    return LaunchDescription(
+        [
+            DeclareLaunchArgument(
+                "vehicle",
+                default_value=constants.DEFAULT_VEHICLE_PROFILE,
+                choices=["current_m5", "future_t200"],
+            ),
+            DeclareLaunchArgument("manual_control", default_value="false"),
+            DeclareLaunchArgument("max_power", default_value="1.0"),
+            DeclareLaunchArgument(
+                "world", default_value="pool", choices=["pool", "bb_woollett"]
+            ),
+            DeclareLaunchArgument(
+                "gui", default_value="true", choices=["true", "false"]
+            ),
+            DeclareLaunchArgument(
+                "control_rate",
+                default_value=str(constants.CONTROLLER_DEFAULTS["rate"]),
+            ),
+            DeclareLaunchArgument(
+                "output_rate",
+                default_value=str(constants.CONTROLLER_DEFAULTS["output_rate"]),
+            ),
+            OpaqueFunction(function=start_world),
+            bridge,
+            vehicle,
+        ]
+    )

@@ -1,0 +1,45 @@
+# Production template. Supply calibration before enabling perception.
+# Relative paths are relative to THIS file. No game targets are assumed.
+camera:
+  enabled: true
+  name: zed
+  serial_number: 0
+  resolution: HD720
+  fps: 30
+  publish_fps: 15.0
+  depth_mode: NEURAL_LIGHT
+  slam: true
+  tracking_mode: GEN_3
+  compute_preference: PREFER_CPU
+  publish_tf: true
+  publish_map_tf: true
+  sdk_calibration: calibration/underwater_opencv.yml
+underwater:
+  depth_source: refractive
+  housing: calibration/housing.yaml
+  rectification: calibration/rectification.npz
+perception:
+  enabled: true
+  detector_model: null
+  image_size: 640
+  device: "0"
+  max_fps: 10.0
+  roi_stride: 3
+  max_points: 2500
+  min_points: 30
+  min_depth: 0.3
+  max_depth: 3.0
+  max_confidence: 50.0  # ZED: 0 best, 100 worst.
+  max_ray_gap: 0.01
+  min_ray_angle_deg: 0.5
+  max_depth_spread: 0.15
+  measurement_sigma: 0.02  # Conservative floor, requires underwater validation.
+  debug_clouds: true
+frames:
+  output: []  # Add base_link, odom, map only when the TF chain exists.
+  tracking_timeout: 0.3
+  # Optional measured T_camera_link_base_link, xyz metres + xyzw quaternion.
+  # Camera owns odom->zed_camera_link. This edge must point camera->base
+  # when the wrapper owns odometry, to avoid two parents for the camera.
+  camera_to_base: null
+targets: []

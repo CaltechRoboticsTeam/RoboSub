@@ -1,6 +1,6 @@
 # ROS 2 Humble + Gazebo Harmonic — matches the Jetson's distro so sim code
 # and vehicle code stay identical.
-FROM osrf/ros:humble-desktop-full
+FROM osrf/ros:humble-desktop
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -28,8 +28,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-humble-tf2-tools \
       ros-humble-tf2-ros \
       ros-humble-teleop-twist-keyboard \
+      ros-humble-joy \
+      ros-humble-mavros-msgs \
       ros-humble-rqt-common-plugins \
       ros-humble-rqt-tf-tree \
+      ros-humble-foxglove-bridge \
+      ros-humble-rosbag2-storage-mcap \
       ros-humble-image-transport-plugins \
       ros-humble-vision-opencv \
       python3-colcon-common-extensions \

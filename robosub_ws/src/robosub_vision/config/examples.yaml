@@ -1,0 +1,37 @@
+# SOFTWARE EXAMPLES ONLY. Enable after supplying the trained model/calibration.
+camera:
+  enabled: false
+underwater:
+  depth_source: zed
+perception:
+  enabled: true
+  detector_model: null
+targets:
+  - name: example_box
+    enabled: false
+    detector_class: example_box
+    method: cad
+    mesh: ../models/example_box.stl
+    units: meters
+    refine: true
+    max_rmse: 0.025
+    symmetry:
+      rotations_xyzw: [[0, 0, 0, 1], [1, 0, 0, 0],
+                       [0, 1, 0, 0], [0, 0, 1, 0]]
+  - name: example_panel
+    enabled: false
+    detector_class: example_panel
+    method: planar
+    width: 0.4
+    height: 0.3
+    # Detector landmark order: top-left, top-right, bottom-right, bottom-left.
+    keypoint_indices: [0, 1, 2, 3]
+  - name: example_cylinder
+    enabled: false
+    detector_class: example_cylinder
+    method: cylinder
+    radius: 0.025
+  - name: example_position
+    enabled: false
+    detector_class: example_box
+    method: position

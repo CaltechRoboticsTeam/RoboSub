@@ -1,0 +1,121 @@
+"""Map Xbox input to vehicle commands."""
+
+import math
+from numbers import Real
+
+from robosub_control.config import constants
+
+ZERO = (0.0, 0.0, 0.0, 0.0, 0.0)
+LB, RB, SELECT, START = 4, 5, 6, 7
+NO_BUTTONS = (0,) * 8
+
+
+def validate_buttons(buttons):
+    """Check A/B/X/Y/LB/RB/Select/Start buttons."""
+    values = tuple(buttons)
+    if len(values) != 8 or any(
+        type(value) is not int or value not in (0, 1) for value in values
+    ):
+        raise ValueError("Expected eight 0/1 controller buttons")
+    return values
+
+
+def validate_axes(axes):
+    """Validate the two sticks and two normalized browser triggers."""
+    if len(axes) != 6:
+        raise ValueError("Expected four stick axes followed by LT and RT")
+    values = tuple(axes)
+    if any(
+        isinstance(value, bool)
+        or not isinstance(value, Real)
+        or not math.isfinite(value)
+        or abs(value) > 1.0
+        for value in values
+    ) or any(value < 0 for value in values[4:]):
+        raise ValueError("Invalid stick or trigger values")
+    return values
+
+
+class GamepadControl:
+    """Use fresh controller input while the operator has enabled driving."""
+
+    def __init__(self, source, max_effort=constants.GAMEPAD_MAX_EFFORT):
+        self.source = source
+        self.max_effort = float(max_effort)
+        self.deadzone = constants.GAMEPAD_DEADZONE
+        self.timeout = constants.GAMEPAD_INPUT_TIMEOUT_S
+        self.stop()
+
+    def clear_input(self):
+        self.last_rx = None
+        self.command = ZERO
+        self.buttons = NO_BUTTONS
+
+    def stop(self):
+        self.enabled = False
+        self.clear_input()
+
+    def set_enabled(self, enabled):
+        if type(enabled) is not bool:
+            raise ValueError("Enabled state must be boolean")
+        self.enabled = enabled
+        if not enabled:
+            self.clear_input()
+
+    def accept(self, axes, buttons, now):
+        try:
+            # ROS SDL inverts trigger axes: released=0, pressed=-1.
+            values = list(axes)
+            if self.source == "local" and len(values) == 6:
+                values[4:] = [-value for value in values[4:]]
+            values = validate_axes(values)
+            if self.source == "browser":
+                if len(buttons) != 9 or type(buttons[0]) is not int:
+                    raise ValueError("Missing operator enabled state")
+                if buttons[0] not in (0, 1):
+                    raise ValueError("Operator enabled state must be 0 or 1")
+                self.set_enabled(bool(buttons[0]))
+                actions = buttons[1:]
+            else:
+                # SDL game_controller_node uses different shoulder/menu slots.
+                if len(buttons) < 11:
+                    raise ValueError("Expected SDL controller buttons")
+                actions = [
+                    buttons[index] for index in (0, 1, 2, 3, 9, 10, 4, 6)
+                ]
+            actions = validate_buttons(actions)
+        except (ValueError, TypeError, OverflowError):
+            self.clear_input()
+            raise ValueError("Invalid gamepad input") from None
+        self.last_rx = now
+        if not self.enabled:
+            self.command = ZERO
+            self.buttons = NO_BUTTONS
+            return
+        self.buttons = actions
+
+        def axis(value):
+            magnitude = max(0.0, abs(value) - self.deadzone)
+            return math.copysign(magnitude / (1.0 - self.deadzone), value)
+
+        polarity = -1.0 if self.source == "browser" else 1.0
+        left_x, left_y, right_x, right_y = (
+            polarity * axis(value) for value in values[:4]
+        )
+        left_trigger, right_trigger = (axis(value) for value in values[4:])
+        translation = max(1.0, math.hypot(left_x, left_y))
+        self.command = tuple(
+            self.max_effort * value
+            for value in (
+                left_y / translation,
+                left_x / translation,
+                right_y,
+                right_trigger - left_trigger,
+                right_x,
+            )
+        )
+
+    def sample(self, now):
+        if self.last_rx is None or not 0 <= now - self.last_rx <= self.timeout:
+            self.clear_input()
+        return self.command

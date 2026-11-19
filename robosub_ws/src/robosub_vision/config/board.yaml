@@ -1,0 +1,8 @@
+# Measure the printed board before setting measured: true.
+measured: false
+columns: 6
+rows: 4
+marker_size: 0.055
+marker_spacing: 0.010
+first_id: 0
+dictionary: DICT_APRILTAG_36h11

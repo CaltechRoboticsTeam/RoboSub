@@ -1,0 +1,15 @@
+# Explicit UNCORRECTED camera/SLAM development. No detector model needed.
+camera:
+  enabled: true
+  depth_mode: NEURAL_LIGHT
+  slam: true
+  tracking_mode: GEN_3
+  compute_preference: PREFER_CPU
+  sdk_calibration: null
+underwater:
+  depth_source: zed
+perception:
+  enabled: true
+frames:
+  output: []
+targets: []
